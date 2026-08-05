@@ -2,7 +2,11 @@
 .codex
 __pycache__/
 *.py[cod]
+.ipynb_checkpoints/
 .env
 research-documents/
 diagram.md
 drawio-architecture-*.md
+experiment/pcbert_kla_clean/outputs/*
+!experiment/pcbert_kla_clean/outputs/
+!experiment/pcbert_kla_clean/outputs/paper_reported_metrics.json

@@ -1,159 +1,123 @@
-# PCBert-Kla Extension
+# PCBert-Kla Reproducibility Framework
 
-This folder contains scripts for achieving satisfactory Kla sites prediction.
+This directory contains the active implementation for PCBert-Kla replication
+and the proposed token-gated Kla prediction framework. The code is organized as
+a reproducible command-line and notebook workflow for local GPU environments
+and Google Colab.
 
-The goal is to keep the original cloned baseline untouched while making a
-version that can be run and audited on Google Colab or a local GPU machine.
-
-## Code Layout
+## Directory Structure
 
 ```text
 experiment/pcbert_kla_clean/
-├── scripts/run_replication.py        # command-line entry point
+├── main.ipynb
+├── requirements.txt
+├── scripts/
+│   └── run_replication.py
 └── src/pcbert_kla_clean/
-    ├── backbones.py                  # PLM loading/tokenizer/site-index helpers
-    ├── data.py                       # PCBert-Kla data parsing and audits
-    ├── datasets.py                   # PyTorch dataset, collation, sequence formatting
-    ├── experiments.py                # CV, independent test, ensemble runners
-    ├── metrics.py                    # ACC, AUC, AUPRC, F1, MCC, Pre, Rec, SP
-    ├── model.py                      # baseline and token-gated architectures
-    ├── training.py                   # training/evaluation loops and optimizer setup
-    └── utils.py                      # reproducibility utilities
+    ├── backbones.py
+    ├── data.py
+    ├── datasets.py
+    ├── experiments.py
+    ├── metrics.py
+    ├── model.py
+    ├── training.py
+    └── utils.py
 ```
 
-## What This Fixes
+## Implemented Functionality
 
-- Parses the upstream `train.csv` and `test.csv` files as FASTA-like files.
-- Uses the provided `feature_train.csv` and `feature_test.csv` tables.
-- Removes hardcoded author paths such as `/home/hqzhang/...`.
-- Removes hardcoded GPU selection such as `cuda:2`.
-- Fixes the model `forward()` method so it uses its actual input argument.
-- Fits the feature scaler inside each training fold to avoid validation leakage.
-- Reports the metrics used in the paper: ACC, Rec, Pre, AUC, MCC, F1, SP, AUPRC.
+- Parsing of the original PCBert-Kla `train.csv` and `test.csv` FASTA-like
+  benchmark files.
+- Loading of the original `feature_train.csv` and `feature_test.csv`
+  physicochemical feature tables.
+- Dataset audit reporting, including sample counts, duplicate sequence counts,
+  feature dimensionality, and train/test sequence overlap.
+- Five-fold cross-validation and independent-test evaluation.
+- Baseline PCBert-Kla-style classifier.
+- Proposed token-gated architecture with central-lysine-guided token pooling,
+  physicochemical feature projection, gated fusion, and residual MLP
+  classification.
+- Backbone comparison with ProtBert, ESM-2, ProtT5, and Ankh.
+- Component ablations for the token-gated architecture.
 
-## Local Data Check
+## Data
 
-From the repository root:
+All active experiments use the original benchmark files under:
 
-```bash
-python3 experiment/pcbert_kla_clean/scripts/run_replication.py --run data-check
+```text
+baselines/PCBert-Kla-original/data/
 ```
 
-This does not download ProtBert or train anything. It only validates the files
-and prints dataset counts, duplicate sequence counts, and train/test overlap.
+The benchmark consists of 51-amino-acid windows centered on a candidate lysine
+and 27 physicochemical or residue-composition features. The same training and
+independent test splits are retained for fair comparison with the published
+PCBert-Kla results.
 
-## Colab Quick Start
-
-In a Colab notebook, after cloning your research repository:
+## Setup
 
 ```bash
-%cd /content/Dr-Mobeen-Research/experiment/pcbert_kla_clean
-!pip install -r requirements.txt
-!python3 scripts/run_replication.py --run data-check
+cd experiment/pcbert_kla_clean
+pip install -r requirements.txt
 ```
 
-For five-fold cross-validation:
+## Dataset Audit
 
 ```bash
-!python3 scripts/run_replication.py \
+python3 scripts/run_replication.py --run data-check
+```
+
+The audit does not download any protein language model checkpoint. It validates
+the benchmark files and reports dataset statistics.
+
+## Baseline Replication
+
+Five-fold cross-validation:
+
+```bash
+python3 scripts/run_replication.py \
   --run cv \
   --epochs 30 \
   --batch-size 4 \
-  --device cuda \
-  --save-models
+  --device cuda
 ```
 
-For an independent test run:
+Independent-test evaluation:
 
 ```bash
-!python3 scripts/run_replication.py \
+python3 scripts/run_replication.py \
   --run independent \
   --epochs 30 \
   --batch-size 4 \
-  --device cuda \
-  --save-models
+  --device cuda
 ```
 
-For validation-calibrated thresholding, choose the threshold on the held-out
-validation subset and then apply that fixed threshold to the independent test
-set:
+## Proposed Token-Gated Model
+
+Primary single-model configuration:
 
 ```bash
-!python3 scripts/run_replication.py \
+python3 scripts/run_replication.py \
   --run independent \
+  --architecture token_gated \
   --epochs 30 \
   --batch-size 4 \
   --device cuda \
-  --calibrate-threshold MCC \
-  --save-models
+  --optimizer sgd \
+  --learning-rate 0.003 \
+  --weight-decay 0.0 \
+  --scheduler none
 ```
 
-Use `--calibrate-threshold F1` if the goal is to maximize validation F1
-instead of MCC. The independent test set is not used to choose the threshold.
-Prediction CSVs are saved by default in `outputs/` for auditability.
+This configuration uses `Rostlab/prot_bert` by default, retains the first four
+ProtBert encoder layers, and fine-tunes the retained encoder layers together
+with the token-gated prediction head.
 
-For seed ensembling, train several independent models and average their
-independent-test probabilities:
+## Optimizer Comparison
 
-```bash
-!python3 scripts/run_replication.py \
-  --run ensemble-independent \
-  --epochs 30 \
-  --batch-size 4 \
-  --device cuda \
-  --ensemble-seeds 42,123,2025
-```
-
-This is more expensive than a single independent run because it trains one
-model per seed. Start with three seeds on free Colab; use five seeds if the
-session has enough time:
+AdamW configuration:
 
 ```bash
-!python3 scripts/run_replication.py \
-  --run ensemble-independent \
-  --epochs 30 \
-  --batch-size 4 \
-  --device cuda \
-  --ensemble-seeds 42,123,2025,3407,777
-```
-
-For optimizer modernization, switch from the paper's SGD setup to AdamW:
-
-```bash
-!python3 scripts/run_replication.py \
-  --run independent \
-  --epochs 30 \
-  --batch-size 4 \
-  --device cuda \
-  --optimizer adamw \
-  --learning-rate 2e-5 \
-  --weight-decay 0.01 \
-  --scheduler linear \
-  --warmup-ratio 0.1
-```
-
-If that is promising, combine AdamW with the ensemble mode:
-
-```bash
-!python3 scripts/run_replication.py \
-  --run ensemble-independent \
-  --epochs 30 \
-  --batch-size 4 \
-  --device cuda \
-  --optimizer adamw \
-  --learning-rate 2e-5 \
-  --weight-decay 0.01 \
-  --scheduler linear \
-  --warmup-ratio 0.1 \
-  --ensemble-seeds 42,123,2025
-```
-
-For the proposed architecture experiment, keep the same benchmark data and
-inputs but replace the static CLS-plus-feature classifier with site-aware token
-attention and gated fusion:
-
-```bash
-!python3 scripts/run_replication.py \
+python3 scripts/run_replication.py \
   --run independent \
   --architecture token_gated \
   --epochs 30 \
@@ -166,68 +130,29 @@ attention and gated fusion:
   --warmup-ratio 0.1
 ```
 
-If `token_gated` improves ranking metrics but not threshold metrics, try the
-more conservative hybrid variant. It preserves the original CLS/global ProtBert
-context and adds site-aware token pooling:
+## Backbone Comparison
+
+ESM-2 35M:
 
 ```bash
-!python3 scripts/run_replication.py \
-  --run independent \
-  --architecture hybrid_gated \
-  --epochs 30 \
-  --batch-size 4 \
-  --device cuda \
-  --optimizer adamw \
-  --learning-rate 2e-5 \
-  --weight-decay 0.01 \
-  --scheduler linear \
-  --warmup-ratio 0.1
-```
-
-To test whether the token-gated framework transfers to another protein language
-model, replace ProtBert with ESM-2. Start with a Colab-friendly ESM-2 checkpoint:
-
-```bash
-!python3 scripts/run_replication.py \
+python3 scripts/run_replication.py \
   --run independent \
   --architecture token_gated \
   --model-name facebook/esm2_t12_35M_UR50D \
   --epochs 30 \
   --batch-size 4 \
   --device cuda \
-  --optimizer sgd \
-  --learning-rate 0.003 \
-  --weight-decay 0.0 \
-  --scheduler none
+  --optimizer adamw \
+  --learning-rate 2e-5 \
+  --weight-decay 0.01 \
+  --scheduler linear \
+  --warmup-ratio 0.1
 ```
 
-If memory allows, try the stronger 150M checkpoint:
+ProtT5 frozen encoder:
 
 ```bash
-!python3 scripts/run_replication.py \
-  --run independent \
-  --architecture token_gated \
-  --model-name facebook/esm2_t30_150M_UR50D \
-  --epochs 30 \
-  --batch-size 4 \
-  --device cuda \
-  --optimizer sgd \
-  --learning-rate 0.003 \
-  --weight-decay 0.0 \
-  --scheduler none
-```
-
-The runner uses `--sequence-format auto` by default: ProtBert receives spaced
-residues, ProtT5 receives spaced residues with rare amino acids mapped to `X`,
-and ESM-style models receive raw amino-acid strings.
-
-To add a T5-family protein language model to the backbone comparison table, use
-the encoder-only half-precision ProtT5 checkpoint. Start with the encoder frozen
-so Colab trains only the token-gated prediction head while using ProtT5 as a
-feature extractor:
-
-```bash
-!python3 scripts/run_replication.py \
+python3 scripts/run_replication.py \
   --run independent \
   --architecture token_gated \
   --model-name Rostlab/prot_t5_xl_half_uniref50-enc \
@@ -243,31 +168,10 @@ feature extractor:
   --warmup-ratio 0.1
 ```
 
-If memory allows and the frozen-encoder result is promising, try fine-tuning a
-small truncated ProtT5 encoder. Keep the batch size small:
+Ankh-base frozen encoder:
 
 ```bash
-!python3 scripts/run_replication.py \
-  --run independent \
-  --architecture token_gated \
-  --model-name Rostlab/prot_t5_xl_half_uniref50-enc \
-  --encoder-layers 4 \
-  --epochs 30 \
-  --batch-size 1 \
-  --device cuda \
-  --optimizer adamw \
-  --learning-rate 1e-5 \
-  --weight-decay 0.01 \
-  --scheduler linear \
-  --warmup-ratio 0.1
-```
-
-To add Ankh as another T5-family backbone, start with `ankh-base` and a frozen
-encoder. This is intended as a backbone-ablation entry rather than the main
-headline model:
-
-```bash
-!python3 scripts/run_replication.py \
+python3 scripts/run_replication.py \
   --run independent \
   --architecture token_gated \
   --model-name ElnaggarLab/ankh-base \
@@ -283,107 +187,77 @@ headline model:
   --warmup-ratio 0.1
 ```
 
-Use `--batch-size 1` if Colab runs out of GPU memory. `ankh-large` is available
-but should be treated as optional because it is substantially heavier.
+## Token-Gated Ablation Study
 
-If the single-seed run is promising, evaluate the same architecture as a
-three-seed ensemble:
+The ablation study keeps the ProtBert token-gated SGD configuration fixed and
+removes one component at a time.
+
+No gated fusion:
 
 ```bash
-!python3 scripts/run_replication.py \
-  --run ensemble-independent \
+python3 scripts/run_replication.py \
+  --run independent \
   --architecture token_gated \
+  --ablation no_gated_fusion \
   --epochs 30 \
   --batch-size 4 \
   --device cuda \
-  --optimizer adamw \
-  --learning-rate 2e-5 \
-  --weight-decay 0.01 \
-  --scheduler linear \
-  --warmup-ratio 0.1 \
-  --ensemble-seeds 42,123,2025
+  --optimizer sgd \
+  --learning-rate 0.003 \
+  --weight-decay 0.0 \
+  --scheduler none
 ```
 
-Free Colab GPU memory may be tight because ProtBert is large. If the session
-runs out of memory, first try reducing `--batch-size` to `2` or `1`.
+No physicochemical feature branch:
 
-## Scientific Notes
-
-The upstream data matches the paper's sample counts:
-
-- Training set: 1720 Kla and 1767 non-Kla records.
-- Test set: 177 Kla and 177 non-Kla records.
-- Every sequence window has length 51.
-- The encoded lysine position is 26 using 1-based indexing.
-
-There is train/test sequence overlap in the provided data. The data-check
-command reports this explicitly. We should document this in any replication
-notes because overlap can inflate independent-test performance.
-
-## Default Modeling Choices
-
-The default runner is faithful to the paper/notebook:
-
-- `Rostlab/prot_bert`
-- first 4 encoder layers retained
-- physicochemical feature vector dimension 27
-- SGD optimizer
-- learning rate `0.003`
-- weight decay `0.0`
-- no scheduler
-- batch size `4`
-- 30 epochs
-- 5-fold shuffled KFold with seed `42`
-- fixed decision threshold `0.5` unless `--calibrate-threshold` is provided
-
-For stricter follow-up experiments, prefer `--splitter stratified` and later a
-homology-aware split.
-
-## Proposed Architecture Variant
-
-The `--architecture token_gated` model is designed as a deliberate
-same-dataset architectural change:
-
-```text
-51-aa sequence
-  -> ProtBert token embeddings
-  -> site-aware attention pooling around the central lysine
-  -> sequence representation
-
-27 physicochemical features
-  -> feature projection
-  -> physicochemical representation
-
-sequence representation + physicochemical representation
-  -> learned gated fusion
-  -> residual MLP classifier
-  -> Kla probability
+```bash
+python3 scripts/run_replication.py \
+  --run independent \
+  --architecture token_gated \
+  --ablation no_physicochemical \
+  --epochs 30 \
+  --batch-size 4 \
+  --device cuda \
+  --optimizer sgd \
+  --learning-rate 0.003 \
+  --weight-decay 0.0 \
+  --scheduler none
 ```
 
-The justification is:
+No sequence branch:
 
-- Kla is site-specific, so token-level residue information around the central
-  lysine should be more informative than a single static pooled vector.
-- The physicochemical vector is a second modality, so learned gating is a more
-  controlled fusion mechanism than blind concatenation.
-- The dataset and feature sources remain unchanged, preserving fair comparison
-  with PCBert-Kla.
-
-Recommended ablation order:
-
-```text
-1. baseline + SGD
-2. baseline + AdamW
-3. token_gated + AdamW
-4. hybrid_gated + AdamW
-5. token_gated + SGD
-6. token_gated + SGD + alternate PLM backbone, such as ESM-2
-7. best architecture + optimizer setting + seed ensemble
+```bash
+python3 scripts/run_replication.py \
+  --run independent \
+  --architecture token_gated \
+  --ablation no_sequence \
+  --epochs 30 \
+  --batch-size 4 \
+  --device cuda \
+  --optimizer sgd \
+  --learning-rate 0.003 \
+  --weight-decay 0.0 \
+  --scheduler none
 ```
 
-`hybrid_gated` is the conservative follow-up variant: it keeps the baseline CLS
-embedding and augments it with the central-lysine-aware token-pooled embedding
-before gated fusion with physicochemical features.
+## Reproducibility Notes
 
-For backbone ablations, keep the dataset, physicochemical features, architecture,
-optimizer, and evaluation protocol fixed; only change `--model-name`.
+- Default checkpoint: `Rostlab/prot_bert`.
+- Default retained encoder depth: 4 layers.
+- Default feature dimension: 27.
+- Default batch size: 4.
+- Default epoch count: 30.
+- Default decision threshold: 0.5.
+- Validation is performed after every epoch for independent-test runs that use
+  the default validation split.
+- Protein language model embeddings are computed during each training and
+  evaluation batch; they are not precomputed.
+- Mixed precision, gradient accumulation, LoRA, and gradient checkpointing are
+  not enabled in the current implementation.
+
+## Benchmark Caveat
+
+The original benchmark contains train/test sequence overlap. The audit command
+reports the overlap explicitly. Results should therefore be interpreted as
+same-benchmark comparisons against PCBert-Kla rather than as evidence of
+generalization to a fully independent homology-filtered benchmark.
