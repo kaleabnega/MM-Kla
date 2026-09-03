@@ -9,8 +9,7 @@ compared fairly against the published PCBert-Kla model.
 ## Research Goal
 
 The goal is to improve Kla site prediction while using the same training and
-independent test data as the baseline paper. This makes the comparison focused
-on the modeling framework rather than on changes to the dataset.
+independent test data as the baseline paper. This makes the comparison focused on the modeling framework rather than on changes to the dataset.
 
 The active proposed model combines:
 
