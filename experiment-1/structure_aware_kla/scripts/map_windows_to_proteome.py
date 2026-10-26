@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gzip
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -78,7 +79,8 @@ def parse_fasta(path: Path) -> list[ProteinRecord]:
             )
         )
 
-    with path.open() as fasta_file:
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rt") as fasta_file:
         for raw_line in fasta_file:
             line = raw_line.strip()
             if not line:

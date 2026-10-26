@@ -64,17 +64,37 @@ rows whose exact windows occur in training, 81 of the remaining 99 test rows
 uniquely map to an accession represented in training. The other 18 have
 ambiguous site mappings.
 
+A follow-up audit using a dated UniProt B05.10 proteome, the public DeepKla
+train/test files, and Gao et al. 2020 Supplementary Table 1 is recorded in
+`experiment-1/structure_aware_kla/results/source_site_audit_2026_10_27/`.
+The DeepKla and PCBert-Kla sequence-label files are identical as multisets;
+the dated proteome reproduces all 3,841 earlier candidate-site assignments.
+Of the 172 distinct positive training windows, 169 exactly match a Gao
+accession and Kla position and three match reported modified peptides with
+different current proteome accessions. In the test positives, 174 are exact
+Gao site matches and three are peptide-only matches. Of the exact positive
+site assignments, 167 appear in both original partitions and only seven are
+test-only. Four test negatives exactly match Gao-reported Kla sites, with
+one additional negative matching a reported modified peptide only.
+
+These findings strongly connect the benchmark positives to the published
+*B. cinerea* lactylome, including the nominal training positives. They do not
+establish the original parent protein of every benchmark record, particularly
+the negatives, or resolve the discrepancy with the publications' description
+of rice-derived training data. The dataset authors should be asked for the
+original accession/site/label inventory before a verified protein-level
+partition is claimed.
+
 These are **candidate sequence matches**, not verified source annotations.
 The original *DeepKla* and PCBert-Kla publications describe rice-derived
 training and *B. cinerea* testing, whereas the mapping artifact matches the
 released training and test windows to the *B. cinerea* proteome. The benchmark
-files expose only generic `Protein N` names. The precise proteome FASTA release
-used for the earlier mapping was not retained locally, so the mapping must be
-regenerated from a versioned proteome before it can be treated as independently
-reproduced. Experimental source proteins, site positions, label construction,
-and this species discrepancy require confirmation from the original dataset
-authors or source tables. No biological label should be inferred merely from a
-sequence match.
+files expose only generic `Protein N` names. The initial proteome FASTA was
+not retained, but the mapping has now been reproduced using the dated FASTA
+and checksums in the follow-up audit. Experimental source proteins,
+negative-label construction, and the species discrepancy still require
+confirmation from the original dataset authors. No biological label should
+be inferred merely from a sequence match.
 
 From the repository root, the audit can be rerun without a GPU:
 
@@ -137,9 +157,10 @@ predictions, and paired statistical comparisons are needed before revising the
 performance claims. The original overlap-affected metrics should be labeled
 as historical benchmark results in any revised manuscript.
 
-The immediate dependency is a versioned full-protein FASTA and an authoritative
-accession/site/label table. Until those are obtained and reconciled, no
-protein-disjoint test set should be described as verified.
+The versioned full-protein FASTA is available. The remaining dependency is an
+authoritative accession/site/label table for all benchmark rows, including
+negatives. Until the records are reconciled, no protein-disjoint test set
+should be described as verified.
 
 For background on sequence leakage and non-overlapping group evaluation, see
 [Hou et al., PLOS Computational Biology (2022)](https://doi.org/10.1371/journal.pcbi.1010669)

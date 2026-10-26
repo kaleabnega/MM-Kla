@@ -1,0 +1,113 @@
+{
+  "benchmark_row_evidence": {
+    "test_label_0_no_source_site_match": 172,
+    "test_label_0_one_source_site_match": 4,
+    "test_label_0_peptide_match_only": 1,
+    "test_label_1_one_source_site_match": 174,
+    "test_label_1_peptide_match_only": 3,
+    "train_label_0_no_source_site_match": 1767,
+    "train_label_1_one_source_site_match": 1690,
+    "train_label_1_peptide_match_only": 30
+  },
+  "benchmark_unique_window_evidence_by_split_and_label": {
+    "test_label_0_no_source_site_match": 172,
+    "test_label_0_one_source_site_match": 4,
+    "test_label_0_peptide_match_only": 1,
+    "test_label_1_one_source_site_match": 174,
+    "test_label_1_peptide_match_only": 3,
+    "train_label_0_no_source_site_match": 1667,
+    "train_label_1_one_source_site_match": 169,
+    "train_label_1_peptide_match_only": 3
+  },
+  "deepkla_commit": "d9f0f5ef987cd65f1562f1ba312e5608ddd44f9e",
+  "deepkla_vs_pcbert": {
+    "test": {
+      "left_label_counts": {
+        "0": 177,
+        "1": 177
+      },
+      "left_only_sequence_label_pairs": 0,
+      "left_records": 354,
+      "left_unique_sequences": 349,
+      "right_label_counts": {
+        "0": 177,
+        "1": 177
+      },
+      "right_only_sequence_label_pairs": 0,
+      "right_records": 354,
+      "right_unique_sequences": 349,
+      "sequence_label_multiset_equal": true
+    },
+    "train": {
+      "left_label_counts": {
+        "0": 1767,
+        "1": 1720
+      },
+      "left_only_sequence_label_pairs": 0,
+      "left_records": 3487,
+      "left_unique_sequences": 1839,
+      "right_label_counts": {
+        "0": 1767,
+        "1": 1720
+      },
+      "right_only_sequence_label_pairs": 0,
+      "right_records": 3487,
+      "right_unique_sequences": 1839,
+      "sequence_label_multiset_equal": true
+    }
+  },
+  "exact_gao_positive_site_overlap": {
+    "sites_in_both_splits": 167,
+    "test_only_sites": 7,
+    "test_sites": 174,
+    "train_sites": 169
+  },
+  "gao_site_window_reconstruction": {
+    "accession_not_in_proteome": 5,
+    "reconstructed_sites": 208,
+    "site_not_a_lysine_at_reported_position": 0,
+    "site_too_close_to_terminus_for_51aa_window": 60,
+    "unique_reconstructed_windows": 208,
+    "windows_in_original_test": 174,
+    "windows_in_original_train": 169
+  },
+  "gao_table_rows": 273,
+  "gao_unique_reported_sites": 273,
+  "input_files": {
+    "deepkla_test": {
+      "path": "/tmp/deepkla-source-audit/DeepKla/data/fungiForTest.fa",
+      "sha256": "da87956e4b3674fa49deb3fa3c9d7a19eaa620808fc661d470fbd9879e91d4b0"
+    },
+    "deepkla_train": {
+      "path": "/tmp/deepkla-source-audit/DeepKla/data/upTrain.fa",
+      "sha256": "2819fe14da1902dacd94f63725baf665ae4524be087886b78b81406dad1d9bd9"
+    },
+    "gao_xlsx": {
+      "path": "experiment-1/structure_aware_kla/source_data/gao_2020_botrytis_lactylome/Table_1.XLSX",
+      "sha256": "b961095860dcc93ede817fd51b171cd336754ba2c47ccf376425c29b7ae50188"
+    },
+    "pcbert_test": {
+      "path": "baselines/PCBert-Kla-original/data/test.csv",
+      "sha256": "f37a441710fb7198c17a104585ac723aa76afd51ff21dc31224aacb89b855d21"
+    },
+    "pcbert_train": {
+      "path": "baselines/PCBert-Kla-original/data/train.csv",
+      "sha256": "5a2f2f220c4761b963b9c4487573f4d6fad516d820ef29837c8553075fa05824"
+    },
+    "previous_mapping_csv": {
+      "path": "experiment-1/structure_aware_kla/results/botrytis_b0510_window_mapping/candidate_protein_sites.csv",
+      "sha256": "edd83a0d4ca3b39cbfa465223c11c82de093bd9cca34d76376c3ae6600bd35e8"
+    },
+    "proteome_fasta": {
+      "path": "experiment-1/structure_aware_kla/source_data/botrytis_b0510_proteome/uniprot_UP000001798_2026-10-26.fasta.gz",
+      "sha256": "d32997a41cf3bd3839ef55d404c839fdcf47d3065ceda780bbcc736aa1277258"
+    }
+  },
+  "interpretation": "An exact accession-and-position match to Gao et al. is evidence for a Kla site, but sequence-only mapping cannot establish the original source protein of every benchmark row. A modified-peptide-only match is weaker evidence and cannot verify an accession crosswalk. An unmatched positive may have another source. A negative matching a reported Kla site is label-discordant and should not be treated as a verified negative.",
+  "previous_mapping_comparison": {
+    "changed_candidate_site_assignments": 0,
+    "identical_candidate_site_assignments": 3841,
+    "records_compared": 3841
+  },
+  "proteome_proteins": 13036
+}

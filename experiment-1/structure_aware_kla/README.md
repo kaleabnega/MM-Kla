@@ -38,6 +38,7 @@ scripts/extract_xlsx_table.py
 scripts/validate_windows_against_modified_peptides.py
 scripts/audit_dataset_provenance.py
 scripts/audit_mapped_sites.py
+scripts/audit_source_site_evidence.py
 ```
 
 These scripts support:
@@ -54,6 +55,11 @@ The recovered Meng et al. rice lactylome supplementary file is stored under:
 ```text
 source_data/meng_2021_rice_lactylome/jf1c00760_si_001.xlsx
 ```
+
+The source-site audit also uses Gao et al. 2020 Supplementary Table 1 and a
+dated UniProt *B. cinerea* B05.10 proteome under `source_data/`. These source
+files are kept separate from the benchmark and identified by SHA-256 checksums
+in the audit report.
 
 The extracted and cleaned audit tables are stored under:
 
@@ -102,9 +108,37 @@ python3 experiment-1/structure_aware_kla/scripts/audit_mapped_sites.py \
 
 Run the command from the repository root. It produces
 `candidate_protein_mapping_audit.json` and `candidate_protein_sites.csv`.
-The original proteome FASTA release needs to be retrieved and archived with a
-checksum before rebuilding the mapping. Candidate sites must be checked against
-the source experimental tables before they are used for a publication split.
+The dated proteome can now be used to rebuild the mapping. The source-site
+comparison is recorded in
+`results/source_site_audit_2026_10_27/source_site_audit.md` and its JSON/CSV
+companions. The audit requires the public DeepKla train/test FASTA files, the
+original PCBert-Kla files, the proteome FASTA, and Gao's supplementary XLSX
+table. From the repository root, using a checkout of DeepKla at commit
+`d9f0f5ef987cd65f1562f1ba312e5608ddd44f9e`:
+
+```bash
+python3 experiment-1/structure_aware_kla/scripts/audit_source_site_evidence.py \
+  --pcbert-train baselines/PCBert-Kla-original/data/train.csv \
+  --pcbert-test baselines/PCBert-Kla-original/data/test.csv \
+  --deepkla-train /tmp/deepkla-source-audit/DeepKla/data/upTrain.fa \
+  --deepkla-test /tmp/deepkla-source-audit/DeepKla/data/fungiForTest.fa \
+  --deepkla-commit d9f0f5ef987cd65f1562f1ba312e5608ddd44f9e \
+  --proteome-fasta experiment-1/structure_aware_kla/source_data/botrytis_b0510_proteome/uniprot_UP000001798_2026-10-26.fasta.gz \
+  --gao-xlsx experiment-1/structure_aware_kla/source_data/gao_2020_botrytis_lactylome/Table_1.XLSX \
+  --previous-mapping-csv experiment-1/structure_aware_kla/results/botrytis_b0510_window_mapping/candidate_protein_sites.csv \
+  --output-dir experiment-1/structure_aware_kla/results/source_site_audit_2026_10_27
+```
+
+Replace the two `/tmp/deepkla-source-audit/` paths if the public source is
+checked out elsewhere. The report records SHA-256 checksums for each input.
+It reproduces all 3,841 prior candidate-site assignments and separately
+identifies exact reported-site matches, modified-peptide-only matches, and
+label-discordant test negatives.
+
+The public DeepKla files do not include source protein IDs. Even source-site
+matches cannot assign an authoritative parent protein to every benchmark
+negative or every repeated window. A publication split must not use inferred
+protein identities without documenting that limitation.
 
 ## Interpretation
 
