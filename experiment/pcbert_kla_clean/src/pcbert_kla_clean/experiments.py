@@ -196,6 +196,7 @@ def train_and_predict_independent(
     tokenizer,
     device: torch.device,
     output_dir: Path | None = None,
+    fixed_validation_indices: np.ndarray | None = None,
 ) -> dict[str, object]:
     set_seed(seed)
     device = torch.device(args.device)
@@ -205,7 +206,14 @@ def train_and_predict_independent(
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.validation_fraction > 0:
+    if fixed_validation_indices is not None:
+        val_idx = np.asarray(fixed_validation_indices, dtype=int)
+        if len(val_idx) == 0 or len(np.unique(val_idx)) != len(val_idx):
+            raise ValueError("Fixed validation indices must be nonempty and unique")
+        if val_idx.min() < 0 or val_idx.max() >= len(train_split.records):
+            raise ValueError("Fixed validation indices are out of bounds")
+        train_idx = np.setdiff1d(np.arange(len(train_split.records)), val_idx)
+    elif args.validation_fraction > 0:
         train_idx, val_idx = train_test_split(
             np.arange(len(train_split.labels)),
             test_size=args.validation_fraction,
@@ -266,9 +274,12 @@ def train_and_predict_independent(
 
     best_state = None
     best_val_score = -np.inf
+    best_epoch = None
+    completed_epochs = 0
     patience_left = args.patience
 
     for epoch in range(1, args.epochs + 1):
+        completed_epochs = epoch
         train_loss = train_one_epoch(
             model,
             train_loader,
@@ -293,8 +304,9 @@ def train_and_predict_independent(
             val_score = val_metrics[args.monitor_metric]
             if val_score > best_val_score:
                 best_val_score = val_score
+                best_epoch = epoch
                 best_state = {
-                    key: value.detach().cpu()
+                    key: value.detach().cpu().clone()
                     for key, value in model.state_dict().items()
                 }
                 patience_left = args.patience
@@ -353,17 +365,50 @@ def train_and_predict_independent(
     test_loss, test_labels, test_scores = predict(model, test_loader, criterion, device)
     test_metrics = compute_binary_metrics(test_labels, test_scores, threshold=threshold)
 
+    if output_dir is not None:
+        run_config = {
+            key: str(value) if isinstance(value, Path) else value
+            for key, value in vars(args).items()
+        }
+        run_config.update(
+            {
+                "model_seed": seed,
+                "fixed_validation_partition": fixed_validation_indices is not None,
+                "training_rows": int(len(train_idx)),
+                "validation_rows": int(len(val_idx)),
+                "test_rows": int(len(test_indices)),
+                "completed_epochs": completed_epochs,
+                "selected_epoch": best_epoch,
+                "selected_by": args.monitor_metric if best_epoch is not None else "last_epoch",
+                "decision_threshold_used": threshold,
+                "threshold_source": threshold_source,
+            }
+        )
+        (output_dir / "run_config.json").write_text(
+            json.dumps(run_config, indent=2, sort_keys=True) + "\n"
+        )
+        (output_dir / "test_metrics.json").write_text(
+            json.dumps({"loss": test_loss, **test_metrics}, indent=2, sort_keys=True)
+            + "\n"
+        )
+
     if args.save_predictions and output_dir is not None:
+        prediction_name = (
+            "diagnostic_test_predictions.csv"
+            if fixed_validation_indices is not None
+            else "independent_test_predictions.csv"
+        )
         save_predictions(
-            output_dir / "independent_test_predictions.csv",
+            output_dir / prediction_name,
             test_split,
             test_indices,
             test_scores,
             threshold,
         )
     if args.save_models and output_dir is not None:
-        torch.save(model.state_dict(), output_dir / f"{args.architecture}_independent.pt")
-        joblib.dump(scaler, output_dir / "feature_scaler_independent.joblib")
+        run_tag = "diagnostic" if fixed_validation_indices is not None else "independent"
+        torch.save(model.state_dict(), output_dir / f"{args.architecture}_{run_tag}.pt")
+        joblib.dump(scaler, output_dir / f"feature_scaler_{run_tag}.joblib")
 
     result = {
         "seed": seed,
@@ -384,7 +429,13 @@ def train_and_predict_independent(
     return result
 
 
-def run_independent(args: Namespace, train_split: KlaSplit, test_split: KlaSplit) -> None:
+def run_independent(
+    args: Namespace,
+    train_split: KlaSplit,
+    test_split: KlaSplit,
+    fixed_validation_indices: np.ndarray | None = None,
+    result_label: str = "Independent test:",
+) -> None:
     device = torch.device(args.device)
     tokenizer = load_tokenizer(args.model_name, args.cache_dir)
     result = train_and_predict_independent(
@@ -395,9 +446,10 @@ def run_independent(args: Namespace, train_split: KlaSplit, test_split: KlaSplit
         tokenizer=tokenizer,
         device=device,
         output_dir=args.output_dir,
+        fixed_validation_indices=fixed_validation_indices,
     )
 
-    print("\nIndependent test:")
+    print(f"\n{result_label}")
     print(
         json.dumps(
             {

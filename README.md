@@ -3,14 +3,16 @@
 This repository contains a reproducible research framework for predicting
 lysine lactylation (Kla) sites using the PCBert-Kla benchmark dataset. The
 project keeps the original baseline code and data separate from the cleaned
-experimental implementation so that the results can be audited, rerun, and
-compared fairly against the published PCBert-Kla model.
+experimental implementation so that results can be audited and rerun. A review
+of the benchmark revealed substantial train/test sequence overlap; the original
+split does not support an independent-generalization claim.
 
 
 ## Research Goal
 
-The goal is to improve Kla site prediction while using the same training and
-independent test data as the baseline paper. This makes the comparison focused on the modeling framework rather than on changes to the dataset.
+The goal is to improve Kla site prediction while establishing reliable
+evaluation. Earlier experiments used the same training and nominal test files
+as the baseline paper. Reviewer-driven evaluation revision is now in progress.
 
 The active proposed model combines:
 
@@ -58,8 +60,11 @@ experiment/
 └── pcbert_kla_clean/             # active reproducible implementation
     ├── main.ipynb                # main research notebook
     ├── README.md                 # detailed experiment commands
+    ├── REVIEW_REVISION.md        # reviewer-driven evaluation protocol
+    ├── FEATURES.md               # 27 descriptor definitions and audit
     ├── requirements.txt
     ├── scripts/run_replication.py
+    ├── scripts/audit_features.py
     └── src/pcbert_kla_clean/
         ├── backbones.py          # ProtBert, ESM-2, ProtT5, Ankh helpers
         ├── data.py               # dataset parsing and audits
@@ -67,6 +72,7 @@ experiment/
         ├── experiments.py        # CV, independent test, ensemble runners
         ├── metrics.py            # ACC, AUC, AUPRC, F1, MCC, Pre, Rec, SP
         ├── model.py              # baseline and token-gated architectures
+        ├── review_dataset.py     # deduplication and diagnostic partition
         ├── training.py           # training/evaluation loops
         └── utils.py              # reproducibility utilities
 
@@ -87,13 +93,15 @@ baselines/PCBert-Kla-original/data/feature_test.csv
 
 The sequence input is a 51-amino-acid window centered on a candidate lysine.
 The tabular input contains 27 physicochemical and residue-composition features.
-The same train/test split is retained for fair comparison with the baseline
-paper.
+The original train/test split is preserved for historical replication. The
+review audit also constructs an exact-window-disjoint diagnostic partition.
 
-## Representative Independent-Test Results
+## Historical Results on the Overlap-Affected Benchmark
 
-The strongest single-model result so far is the ProtBert token-gated model
-trained with SGD.
+The table below records the originally reported comparison. These values were
+obtained on the overlap-affected benchmark and must not be presented as evidence
+of performance on unseen proteins. The published values also require a matched
+rerun before direct comparison with corrected-split results.
 
 | Model / Setting | ACC | AUC | AUPRC | F1 | MCC | Pre | Rec | SP |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -121,9 +129,11 @@ python3 scripts/run_replication.py --run data-check
 
 The data check does not download a protein language model. It validates the
 benchmark files and prints class counts, feature dimensions, duplicate sequence
-counts, and train/test overlap information.
+counts, and train/test overlap information. The reviewer audit is available via
+`python3 scripts/run_replication.py --run review-audit`; see the
+[revision protocol](experiment/pcbert_kla_clean/REVIEW_REVISION.md).
 
-## Best Current Single-Model Run
+## Historical Single-Model Run
 
 ```bash
 cd experiment/pcbert_kla_clean

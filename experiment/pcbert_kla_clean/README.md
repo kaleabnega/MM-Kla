@@ -5,14 +5,24 @@ and the proposed token-gated Kla prediction framework. The code is organized as
 a reproducible command-line and notebook workflow for local GPU environments
 and Google Colab.
 
+The original train/test benchmark has exact sequence overlap. Previous metrics
+remain available for historical comparison, but they do not establish
+performance on unseen proteins. The current revision protocol and audit are
+documented in [REVIEW_REVISION.md](REVIEW_REVISION.md).
+The 27 descriptors and their verified computation are documented in
+[FEATURES.md](FEATURES.md).
+
 ## Directory Structure
 
 ```text
 experiment/pcbert_kla_clean/
 ├── main.ipynb
+├── REVIEW_REVISION.md
+├── FEATURES.md
 ├── requirements.txt
 ├── scripts/
-│   └── run_replication.py
+│   ├── run_replication.py
+│   └── audit_features.py
 └── src/pcbert_kla_clean/
     ├── backbones.py
     ├── data.py
@@ -20,6 +30,7 @@ experiment/pcbert_kla_clean/
     ├── experiments.py
     ├── metrics.py
     ├── model.py
+    ├── review_dataset.py
     ├── training.py
     └── utils.py
 ```
@@ -32,7 +43,8 @@ experiment/pcbert_kla_clean/
   physicochemical feature tables.
 - Dataset audit reporting, including sample counts, duplicate sequence counts,
   feature dimensionality, and train/test sequence overlap.
-- Five-fold cross-validation and independent-test evaluation.
+- Historical five-fold cross-validation and nominal-test evaluation.
+- Reviewer audit and exact-window-disjoint diagnostic evaluation.
 - Baseline PCBert-Kla-style classifier.
 - Proposed token-gated architecture with central-lysine-guided token pooling,
   physicochemical feature projection, gated fusion, and residual MLP
@@ -49,9 +61,9 @@ baselines/PCBert-Kla-original/data/
 ```
 
 The benchmark consists of 51-amino-acid windows centered on a candidate lysine
-and 27 physicochemical or residue-composition features. The same training and
-independent test splits are retained for fair comparison with the published
-PCBert-Kla results.
+and 27 physicochemical or residue-composition features. The original split is
+retained for historical replication; publication claims require a corrected
+evaluation on matched partitions.
 
 ## Setup
 
@@ -68,6 +80,21 @@ python3 scripts/run_replication.py --run data-check
 
 The audit does not download any protein language model checkpoint. It validates
 the benchmark files and reports dataset statistics.
+
+The reviewer audit generates a row-level inventory and a deterministic
+exact-window-disjoint diagnostic split:
+
+```bash
+python3 scripts/run_replication.py --run review-audit
+```
+
+The manifest and JSON report are written under `outputs/review_exact_window/`.
+This split is not protein- or homology-disjoint and is not a replacement for the
+reviewers' requested independent evaluation.
+
+An exploratory model run on that fixed diagnostic split is available with
+`--run window-diagnostic`. It uses the manifest's validation subset for model
+selection and fits feature scaling on the training subset only.
 
 ## Baseline Replication
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -8,7 +10,6 @@ PROJECT_DIR = Path(__file__).resolve().parents[1]
 SRC_DIR = PROJECT_DIR / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from pcbert_kla_clean.backbones import infer_site_token_index  # noqa: E402
 from pcbert_kla_clean.data import (  # noqa: E402
     describe_split,
     load_split,
@@ -25,7 +26,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--run",
-        choices=["data-check", "cv", "independent", "ensemble-independent"],
+        choices=[
+            "data-check",
+            "review-audit",
+            "window-diagnostic",
+            "cv",
+            "independent",
+            "ensemble-independent",
+        ],
         default="data-check",
     )
     parser.add_argument("--model-name", default="Rostlab/prot_bert")
@@ -97,8 +105,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--max-length", type=int, default=64)
     parser.add_argument("--patience", type=int, default=0)
-    parser.add_argument("--monitor-metric", default="ACC")
+    parser.add_argument(
+        "--monitor-metric",
+        choices=["ACC", "AUC", "AUPRC", "F1", "MCC", "Pre", "Rec", "SP"],
+        default=None,
+    )
     parser.add_argument("--validation-fraction", type=float, default=0.1)
+    parser.add_argument("--review-split-seed", type=int, default=42)
+    parser.add_argument("--review-test-fraction", type=float, default=0.2)
+    parser.add_argument("--review-validation-fraction", type=float, default=0.1)
     parser.add_argument("--decision-threshold", type=float, default=0.5)
     parser.add_argument(
         "--calibrate-threshold",
@@ -129,8 +144,6 @@ def resolve_device(device: str) -> str:
 
 
 def run_data_check(train_split, test_split) -> None:
-    import json
-
     report = {
         "train": describe_split(train_split),
         "test": describe_split(test_split),
@@ -141,8 +154,8 @@ def run_data_check(train_split, test_split) -> None:
 
 def main() -> None:
     args = parse_args()
-    if args.site_token_index is None:
-        args.site_token_index = infer_site_token_index(args.model_name)
+    if args.monitor_metric is None:
+        args.monitor_metric = "AUPRC" if args.run == "window-diagnostic" else "ACC"
 
     train_split = load_split(
         args.baseline_root / "data" / "train.csv",
@@ -157,7 +170,55 @@ def main() -> None:
         run_data_check(train_split, test_split)
         return
 
+    fixed_validation_indices = None
+    if args.run in {"review-audit", "window-diagnostic"}:
+        from pcbert_kla_clean.review_dataset import (
+            combine_development_partitions,
+            prepare_review_partitions,
+            save_review_partitions,
+        )
+
+        partitions = prepare_review_partitions(
+            train_split,
+            test_split,
+            seed=args.review_split_seed,
+            test_fraction=args.review_test_fraction,
+            validation_fraction=args.review_validation_fraction,
+        )
+        partitions.report["source_file_sha256"] = {
+            filename: hashlib.sha256(
+                (args.baseline_root / "data" / filename).read_bytes()
+            ).hexdigest()
+            for filename in (
+                "train.csv",
+                "test.csv",
+                "feature_train.csv",
+                "feature_test.csv",
+            )
+        }
+        args.output_dir = args.output_dir / "review_exact_window"
+        save_review_partitions(partitions, args.output_dir)
+        print(json.dumps(partitions.report, indent=2, sort_keys=True))
+        if args.run == "review-audit":
+            return
+        train_split, fixed_validation_indices = combine_development_partitions(partitions)
+        test_split = partitions.test
+
+    from pcbert_kla_clean.backbones import infer_site_token_index
+
+    if args.site_token_index is None:
+        args.site_token_index = infer_site_token_index(args.model_name)
     args.device = resolve_device(args.device)
+    if args.run == "window-diagnostic":
+        run_settings = {
+            key: str(value) if isinstance(value, Path) else value
+            for key, value in vars(args).items()
+        }
+        run_id = hashlib.sha256(
+            json.dumps(run_settings, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:12]
+        args.output_dir = args.output_dir / "runs" / run_id
+        print(f"Diagnostic run output: {args.output_dir}")
     from pcbert_kla_clean.experiments import (
         run_cv,
         run_ensemble_independent,
@@ -168,6 +229,14 @@ def main() -> None:
         run_cv(args, train_split)
     elif args.run == "independent":
         run_independent(args, train_split, test_split)
+    elif args.run == "window-diagnostic":
+        run_independent(
+            args,
+            train_split,
+            test_split,
+            fixed_validation_indices=fixed_validation_indices,
+            result_label="Exact-window-disjoint diagnostic test:",
+        )
     elif args.run == "ensemble-independent":
         run_ensemble_independent(args, train_split, test_split)
     else:
