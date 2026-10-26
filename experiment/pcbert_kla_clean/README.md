@@ -108,7 +108,7 @@ python3 scripts/run_replication.py \
   --device cuda
 ```
 
-Independent-test evaluation:
+Original nominal-test evaluation (historical):
 
 ```bash
 python3 scripts/run_replication.py \

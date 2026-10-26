@@ -37,6 +37,7 @@ scripts/map_windows_to_proteome.py
 scripts/extract_xlsx_table.py
 scripts/validate_windows_against_modified_peptides.py
 scripts/audit_dataset_provenance.py
+scripts/audit_mapped_sites.py
 ```
 
 These scripts support:
@@ -66,7 +67,10 @@ The recovered Meng et al. 2021 rice lactylome table is internally consistent
 and matches the reported scale of 638 Kla sites across 342 proteins. However,
 exact sequence reconstruction from this table does not explain the public
 PCBert-Kla/DeepKla training windows. In contrast, the public benchmark windows
-map strongly to the Botrytis cinerea B05.10 proteome.
+all have exact matches in a *Botrytis cinerea* B05.10 proteome mapping. This is
+an unresolved discrepancy with the published description of rice-derived
+training data; sequence matching alone does not verify the experimental source
+of a label.
 
 This provenance mismatch prevents a defensible claim that the current public
 benchmark can support a native full-protein rice structure branch without
@@ -85,6 +89,22 @@ The report summarizes:
 - peptide evidence against benchmark windows,
 - reconstructed-window overlap,
 - Botrytis proteome mapping.
+
+The per-record mapping audit is generated with:
+
+```bash
+python3 experiment-1/structure_aware_kla/scripts/audit_mapped_sites.py \
+  --mapping-csv experiment-1/structure_aware_kla/results/botrytis_b0510_window_mapping/all_window_matches.csv \
+  --train-windows baselines/PCBert-Kla-original/data/train.csv \
+  --test-windows baselines/PCBert-Kla-original/data/test.csv \
+  --output-dir experiment-1/structure_aware_kla/results/botrytis_b0510_window_mapping
+```
+
+Run the command from the repository root. It produces
+`candidate_protein_mapping_audit.json` and `candidate_protein_sites.csv`.
+The original proteome FASTA release needs to be retrieved and archived with a
+checksum before rebuilding the mapping. Candidate sites must be checked against
+the source experimental tables before they are used for a publication split.
 
 ## Interpretation
 

@@ -1,0 +1,31 @@
+{
+  "accessions_in_both_original_splits_from_any_candidate_mapping": 158,
+  "accessions_in_both_original_splits_from_unique_mappings": 139,
+  "benchmark_rows": 3841,
+  "benchmark_unique_windows": 1937,
+  "input_sha256": {
+    "mapping_csv": "e6cc23a8355864fb8c426fbbd57ab1201f23e3e52c0e3f2ef29cbfebcd3ef341",
+    "test_windows": "f37a441710fb7198c17a104585ac723aa76afd51ff21dc31224aacb89b855d21",
+    "train_windows": "5a2f2f220c4761b963b9c4487573f4d6fad516d820ef29837c8553075fa05824"
+  },
+  "interpretation": "Exact matches to a candidate proteome do not prove that a benchmark label came from that protein or species. Ambiguous mappings cannot be assigned a single parent. No new split is created by this audit.",
+  "mapping_rows": 4427,
+  "match_status_by_original_split": {
+    "test": {
+      "ambiguous_site": 35,
+      "unique_site": 319
+    },
+    "train": {
+      "ambiguous_site": 342,
+      "unique_site": 3145
+    }
+  },
+  "match_status_rows": {
+    "ambiguous_site": 377,
+    "unique_site": 3464
+  },
+  "test_rows_on_accessions_in_both_original_splits_from_unique_mappings": 319,
+  "test_rows_without_exact_train_window": 99,
+  "test_rows_without_exact_train_window_on_shared_unique_accessions": 81,
+  "unique_candidate_accessions": 180
+}
