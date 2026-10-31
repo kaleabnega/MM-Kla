@@ -39,6 +39,43 @@ def load_homology_clusters(path: Path) -> dict[str, str]:
     return clusters
 
 
+def audit_homology_hits(
+    path: Path,
+    accessions: set[str],
+    accession_partition: dict[str, str],
+) -> dict[str, int]:
+    seen_self: set[str] = set()
+    hits = 0
+    cross_partition = 0
+    with path.open(newline="") as handle:
+        for row in csv.reader(handle, delimiter="\t"):
+            if len(row) != 5:
+                raise ValueError("Homology search TSV needs query,target,pident,qcov,tcov")
+            query, target = row[:2]
+            if query not in accessions or target not in accessions:
+                raise ValueError("Homology search TSV contains an unknown accession")
+            try:
+                identity, query_coverage, target_coverage = map(float, row[2:])
+            except ValueError as error:
+                raise ValueError("Homology search TSV contains a nonnumeric score") from error
+            if identity < 30 or query_coverage < 0.8 or target_coverage < 0.8:
+                raise ValueError("Homology search TSV contains a hit below the declared criteria")
+            hits += 1
+            if query == target:
+                seen_self.add(query)
+            if (
+                query in accession_partition
+                and target in accession_partition
+                and accession_partition[query] != accession_partition[target]
+            ):
+                cross_partition += 1
+    if seen_self != accessions:
+        raise ValueError(f"Homology search TSV lacks self-hits for {len(accessions - seen_self)} proteins")
+    if cross_partition:
+        raise ValueError(f"Homology search found {cross_partition} cross-partition hits")
+    return {"hits": hits, "self_hits": len(seen_self), "cross_partition_hits": cross_partition}
+
+
 def _candidate_components(
     windows: list[str],
     candidates: dict[str, set[str]],
@@ -140,6 +177,7 @@ def prepare_candidate_group_partitions(
     *,
     mapping_csv: Path,
     homology_csv: Path | None = None,
+    homology_hits_tsv: Path | None = None,
     seed: int = 42,
     test_fraction: float = 0.2,
     validation_fraction: float = 0.1,
@@ -186,6 +224,16 @@ def prepare_candidate_group_partitions(
         cluster_sets = {name: {clusters[accession] for accession in accessions} for name, accessions in accession_sets.items()}
         if any(cluster_sets[left] & cluster_sets[right] for left, right in pairs):
             raise AssertionError("A supplied homology cluster appears in multiple partitions")
+    if homology_hits_tsv is not None and clusters is None:
+        raise ValueError("Homology hits require a homology cluster file")
+    accession_partition = {
+        accession: name for name, accessions in accession_sets.items() for accession in accessions
+    }
+    hit_audit = (
+        audit_homology_hits(homology_hits_tsv, set().union(*group_accessions.values()), accession_partition)
+        if homology_hits_tsv is not None
+        else None
+    )
 
     assignment_by_window = {
         eligible[int(index)].sequence: name for name, indices in selected.items() for index in indices
@@ -211,6 +259,8 @@ def prepare_candidate_group_partitions(
         },
         "mapping_csv_sha256": hashlib.sha256(mapping_csv.read_bytes()).hexdigest(),
         "homology_csv_sha256": hashlib.sha256(homology_csv.read_bytes()).hexdigest() if homology_csv else None,
+        "homology_hits_tsv_sha256": hashlib.sha256(homology_hits_tsv.read_bytes()).hexdigest() if homology_hits_tsv else None,
+        "homology_hit_audit": hit_audit,
         "protocol": "candidate-protein-group-disjoint diagnostic" + (
             " with supplied homology clusters" if homology_csv else "; homology not screened"
         ),

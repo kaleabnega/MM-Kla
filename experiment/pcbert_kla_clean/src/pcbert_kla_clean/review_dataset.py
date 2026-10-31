@@ -221,7 +221,7 @@ def save_review_partitions(partitions: ReviewPartitions, output_dir: Path) -> No
         json.dumps(partitions.report, indent=2, sort_keys=True) + "\n"
     )
     with (output_dir / "window_inventory.csv").open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(partitions.inventory[0]))
+        writer = csv.DictWriter(handle, fieldnames=list(partitions.inventory[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows(partitions.inventory)
 

@@ -167,11 +167,14 @@ The candidate-mapping audit supports a stricter provisional split without
 assuming that each window has only one possible source protein. The command
 below first removes duplicate and contradictory windows, then joins all
 candidate proteins connected by any window, including excluded contradictory
-windows. Each connected group goes to one partition. The fixed seed 42 run
-contains 1,348 training windows (122 positive), 194 validation windows (17
-positive), and 390 test windows (35 positive); no candidate accession appears
-in two partitions. It is **not** a verified parent-protein split, a homology
-screen, or a previously unseen experimental study.
+windows. Each connected group goes to one partition. The candidate-only seed
+42 run contains 1,348 training, 194 validation, and 390 test windows; no
+candidate accession appears in two partitions. With the documented MMseqs2
+full-protein clusters added, the split contains 1,351 training (122 positive),
+194 validation (17 positive), and 387 test windows (35 positive). The latter
+has no cross-partition qualifying hits in the recorded all-versus-all search.
+Neither split verifies original parent-protein identities or constitutes a
+previously unseen experimental study.
 
 From `experiment/pcbert_kla_clean/`:
 
@@ -180,11 +183,30 @@ python3 scripts/run_replication.py --run candidate-group-audit
 ```
 
 The report and per-window manifest are written to
-`outputs/review_candidate_groups/`. To train on this provisional split, use
-`--run candidate-group-diagnostic` with the same model arguments used for
-`window-diagnostic`. All models in a comparison must use the same split seed,
-mapping file, and, when available, homology clusters. The output must be
+`outputs/review_candidate_groups/`. The cluster-screened seed 42 manifest is
+preserved under `review_data/` as described below. To train on this
+provisional split, use `--run candidate-group-diagnostic` with the cluster
+and search files and the same model arguments used for `window-diagnostic`.
+All models in a comparison must use the same manifest. The output must be
 reported as a diagnostic, not as an independent test estimate.
+
+On a CUDA-enabled Colab runtime, the matched baseline and proposed-model
+runs use this command, first with `baseline` and then with `token_gated`:
+
+```bash
+python3 scripts/run_replication.py \
+  --run candidate-group-diagnostic \
+  --architecture baseline \
+  --homology-clusters-csv review_data/homology_clusters_mmseqs2.csv \
+  --homology-hits-tsv review_data/all_vs_all_mmseqs2.tsv \
+  --epochs 30 --batch-size 4 --device cuda \
+  --optimizer sgd --learning-rate 0.003 --weight-decay 0 --scheduler none \
+  --save-models
+```
+
+Model comparisons require the same fixed split, training recipe, checkpoint
+selection rule, and independently repeated seeds. The originally published
+test scores are historical context, not valid comparators on this new split.
 
 ### Full-Protein Homology Clustering
 
@@ -208,19 +230,36 @@ mmseqs easy-cluster \
   experiment/pcbert_kla_clean/outputs/review_candidate_groups/candidate_proteins.fasta \
   experiment/pcbert_kla_clean/outputs/review_candidate_groups/mmseqs_clusters \
   experiment/pcbert_kla_clean/outputs/review_candidate_groups/mmseqs_tmp \
-  --min-seq-id 0.3 -c 0.8 --cov-mode 0 --cluster-mode 1
+  --min-seq-id 0.3 -c 0.8 --cov-mode 0 --cluster-mode 0 \
+  --cluster-reassign -s 7 --threads 4
 python3 experiment/pcbert_kla_clean/scripts/prepare_homology_clusters.py convert-tsv \
   --mapping-csv experiment-1/structure_aware_kla/results/botrytis_b0510_window_mapping/all_window_matches.csv \
   --cluster-tsv experiment/pcbert_kla_clean/outputs/review_candidate_groups/mmseqs_clusters_cluster.tsv \
-  --output-csv experiment/pcbert_kla_clean/outputs/review_candidate_groups/homology_clusters.csv
+  --output-csv experiment/pcbert_kla_clean/review_data/homology_clusters_mmseqs2.csv
+mmseqs easy-search \
+  experiment/pcbert_kla_clean/outputs/review_candidate_groups/candidate_proteins.fasta \
+  experiment/pcbert_kla_clean/outputs/review_candidate_groups/candidate_proteins.fasta \
+  experiment/pcbert_kla_clean/review_data/all_vs_all_mmseqs2.tsv \
+  experiment/pcbert_kla_clean/outputs/review_candidate_groups/search_tmp \
+  --min-seq-id 0.3 -c 0.8 --cov-mode 0 -s 7 --max-seqs 1000 \
+  --threads 4 --format-output query,target,pident,qcov,tcov
 ```
 
-Then rerun the audit with
-`--homology-clusters-csv outputs/review_candidate_groups/homology_clusters.csv`.
-The command rejects incomplete cluster files and checks that no supplied
-cluster spans partitions. This criterion may miss remote or partial-domain
-similarity; describe it precisely rather than claiming that all homology is
-absent.
+Then, from `experiment/pcbert_kla_clean/`, reproduce the saved audit:
+
+```bash
+python3 scripts/run_replication.py --run candidate-group-audit \
+  --homology-clusters-csv review_data/homology_clusters_mmseqs2.csv \
+  --homology-hits-tsv review_data/all_vs_all_mmseqs2.tsv \
+  --output-dir review_data
+```
+
+The command rejects incomplete cluster files and fails if a supplied cluster
+or qualifying all-versus-all search hit spans partitions. The search file has
+206 hits, including 180 self-hits, and zero cross-partition hits. Exact tool
+version and input checksums are in [the artifact record](review_data/README.md).
+This criterion may miss remote or partial-domain similarity; describe it
+precisely rather than claiming that all homology is absent.
 
 ## Remaining Evaluation
 

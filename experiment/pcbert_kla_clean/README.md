@@ -104,10 +104,12 @@ protein accession crosses the resulting split:
 python3 scripts/run_replication.py --run candidate-group-audit
 ```
 
-Its report and manifest are under `outputs/review_candidate_groups/`. Training
-on that fixed split uses `--run candidate-group-diagnostic`. These are
-provisional results: original parent-protein IDs are not verified, and a
-homology screen and external study-sourced test are still pending. The
+Its report and manifest are under `outputs/review_candidate_groups/`. A
+cluster-screened seed 42 manifest and its supporting protein search are
+preserved in [review_data](review_data/README.md). Training on that fixed
+split uses `--run candidate-group-diagnostic` with the cluster and search
+files. These remain provisional results: original parent-protein IDs are not
+verified, and an external study-sourced test is still pending. The
 [revision protocol](REVIEW_REVISION.md) documents the full-protein clustering
 workflow and remaining evaluation requirements.
 

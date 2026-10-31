@@ -62,7 +62,7 @@ def convert_cluster_tsv(mapping_csv: Path, cluster_tsv: Path, output_csv: Path) 
         )
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     with output_csv.open("w", newline="") as handle:
-        writer = csv.writer(handle)
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(["accession", "cluster_id"])
         writer.writerows((accession, assignments[accession]) for accession in sorted(wanted))
     return len(assignments)

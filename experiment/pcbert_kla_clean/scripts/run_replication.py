@@ -128,6 +128,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional complete accession,cluster_id CSV from a documented full-protein clustering run.",
     )
+    parser.add_argument(
+        "--homology-hits-tsv",
+        type=Path,
+        default=None,
+        help="Optional complete MMseqs2 all-vs-all search TSV for cross-partition hit verification.",
+    )
     parser.add_argument("--decision-threshold", type=float, default=0.5)
     parser.add_argument(
         "--calibrate-threshold",
@@ -205,6 +211,7 @@ def main() -> None:
                 test_split,
                 mapping_csv=args.candidate_mapping_csv,
                 homology_csv=args.homology_clusters_csv,
+                homology_hits_tsv=args.homology_hits_tsv,
                 **split_kwargs,
             )
             args.output_dir = args.output_dir / "review_candidate_groups"

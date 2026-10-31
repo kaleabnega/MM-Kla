@@ -12,7 +12,7 @@ PROJECT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_DIR / "src"))
 sys.path.insert(0, str(PROJECT_DIR / "scripts"))
 
-from pcbert_kla_clean.candidate_groups import prepare_candidate_group_partitions
+from pcbert_kla_clean.candidate_groups import audit_homology_hits, prepare_candidate_group_partitions
 from pcbert_kla_clean.data import KlaRecord, KlaSplit, load_split
 from prepare_homology_clusters import convert_cluster_tsv, export_candidate_fasta
 
@@ -96,6 +96,23 @@ class CandidateGroupTests(unittest.TestCase):
         self.assertEqual(sum(len(getattr(parts, name).records) for name in ("train", "validation", "test")), 1932)
         self.assertIn("homology not screened", parts.report["protocol"])
 
+    def test_bundled_cluster_screened_manifest(self) -> None:
+        root = PROJECT_DIR.parents[1]
+        data = root / "baselines/PCBert-Kla-original/data"
+        review_data = PROJECT_DIR / "review_data"
+        train = load_split(data / "train.csv", data / "feature_train.csv")
+        test = load_split(data / "test.csv", data / "feature_test.csv")
+        parts = prepare_candidate_group_partitions(
+            train,
+            test,
+            mapping_csv=root / "experiment-1/structure_aware_kla/results/botrytis_b0510_window_mapping/all_window_matches.csv",
+            homology_csv=review_data / "homology_clusters_mmseqs2.csv",
+            homology_hits_tsv=review_data / "all_vs_all_mmseqs2.tsv",
+        )
+        self.assertEqual([len(part.records) for part in (parts.train, parts.validation, parts.test)], [1351, 194, 387])
+        self.assertEqual(parts.report["candidate_protein_groups"], 163)
+        self.assertEqual(parts.report["homology_hit_audit"], {"hits": 206, "self_hits": 180, "cross_partition_hits": 0})
+
     def test_cluster_prep_checks_coverage(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)
@@ -114,6 +131,17 @@ class CandidateGroupTests(unittest.TestCase):
             tsv.write_text("P1\tP1\n")
             with self.assertRaisesRegex(ValueError, "missing"):
                 convert_cluster_tsv(mapping, tsv, output)
+
+    def test_homology_hit_audit_rejects_cross_partition_pair(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            hits = Path(directory) / "hits.tsv"
+            hits.write_text("P1\tP1\t100\t1\t1\nP2\tP2\t100\t1\t1\n")
+            assignment = {"P1": "train", "P2": "test"}
+            report = audit_homology_hits(hits, set(assignment), assignment)
+            self.assertEqual(report["cross_partition_hits"], 0)
+            hits.write_text(hits.read_text() + "P1\tP2\t40\t0.9\t0.9\n")
+            with self.assertRaisesRegex(ValueError, "cross-partition hits"):
+                audit_homology_hits(hits, set(assignment), assignment)
 
 
 if __name__ == "__main__":

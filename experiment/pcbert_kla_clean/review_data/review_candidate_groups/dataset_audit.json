@@ -1,0 +1,99 @@
+{
+  "candidate_protein_groups": 163,
+  "candidate_protein_overlap": {
+    "train_test": 0,
+    "train_validation": 0,
+    "validation_test": 0
+  },
+  "candidate_proteins": 180,
+  "combined_unique_windows": 1937,
+  "conflicting_label_windows_across_original_splits": 4,
+  "conflicting_label_windows_within_original_test": 5,
+  "conflicting_label_windows_within_original_train": 0,
+  "excluded_conflicting_label_rows": 50,
+  "excluded_conflicting_label_windows": 5,
+  "excluded_inconsistent_feature_rows": 0,
+  "excluded_inconsistent_feature_windows": 0,
+  "homology_csv_sha256": "8fffc04dcfa335d752acb195f94f05fc791dad3543528d1812abda82d5f2ffab",
+  "homology_hit_audit": {
+    "cross_partition_hits": 0,
+    "hits": 206,
+    "self_hits": 180
+  },
+  "homology_hits_tsv_sha256": "3ca3bbf2fb38a131beda2133c0124fd273a9361decc214dca7428f6067bc240a",
+  "mapping_csv_sha256": "e6cc23a8355864fb8c426fbbd57ab1201f23e3e52c0e3f2ef29cbfebcd3ef341",
+  "original_overlap": {
+    "different_label_test_rows": 4,
+    "overlap_test_rows": 255,
+    "same_label_test_rows": 251,
+    "unique_overlap_sequences": 251
+  },
+  "original_positive_train_unique_windows": 172,
+  "original_test": {
+    "class_counts": {
+      "0": 177,
+      "1": 177
+    },
+    "duplicate_sequence_rows": 5,
+    "feature_dim": 27,
+    "records": 354,
+    "unique_sequences": 349
+  },
+  "original_test_overlap_rows_by_label": {
+    "0": 85,
+    "1": 170
+  },
+  "original_train": {
+    "class_counts": {
+      "0": 1767,
+      "1": 1720
+    },
+    "duplicate_sequence_rows": 1648,
+    "feature_dim": 27,
+    "records": 3487,
+    "unique_sequences": 1839
+  },
+  "partition_seed": 42,
+  "partitions": {
+    "test": {
+      "class_counts": {
+        "0": 352,
+        "1": 35
+      },
+      "duplicate_sequence_rows": 0,
+      "feature_dim": 27,
+      "records": 387,
+      "unique_sequences": 387
+    },
+    "train": {
+      "class_counts": {
+        "0": 1229,
+        "1": 122
+      },
+      "duplicate_sequence_rows": 0,
+      "feature_dim": 27,
+      "records": 1351,
+      "unique_sequences": 1351
+    },
+    "validation": {
+      "class_counts": {
+        "0": 177,
+        "1": 17
+      },
+      "duplicate_sequence_rows": 0,
+      "feature_dim": 27,
+      "records": 194,
+      "unique_sequences": 194
+    }
+  },
+  "protocol": "candidate-protein-group-disjoint diagnostic with supplied homology clusters",
+  "provenance_limit": "Candidate accessions are exact proteome matches, not verified original parent identities. Negative labels are putative. This is not a verified protein-disjoint or independent-study test.",
+  "source_file_sha256": {
+    "feature_test.csv": "1f40f209bdf55b6edbc663785271d17e9ea637207dbd0e46ce6c25fc46b17738",
+    "feature_train.csv": "dc1f19a95bf420804203ab2db1010e15cb925f1bb050b5cdd4066a23c15a942b",
+    "test.csv": "f37a441710fb7198c17a104585ac723aa76afd51ff21dc31224aacb89b855d21",
+    "train.csv": "5a2f2f220c4761b963b9c4487573f4d6fad516d820ef29837c8553075fa05824"
+  },
+  "test_fraction": 0.2,
+  "validation_fraction": 0.1
+}
