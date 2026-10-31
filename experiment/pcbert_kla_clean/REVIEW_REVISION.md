@@ -161,6 +161,48 @@ authoritative accession/site/label table for all benchmark rows, including
 negatives. Until the records are reconciled, no protein-disjoint test set
 should be described as verified.
 
+## Source-Derived Dataset Reconstruction
+
+Gao et al. 2020 Supplementary Table 1 supplies documented *B. cinerea*
+accession-position pairs for positive Kla sites. A separate reconstruction
+starts from those records, rather than assigning inferred accessions to
+the original benchmark rows. From the repository root, with the source
+supplement and dated proteome at the paths below:
+
+```bash
+python3 experiment-1/structure_aware_kla/scripts/reconstruct_gao_sites.py \
+  --gao-xlsx experiment-1/structure_aware_kla/source_data/gao_2020_botrytis_lactylome/Table_1.XLSX \
+  --proteome-fasta experiment-1/structure_aware_kla/source_data/botrytis_b0510_proteome/uniprot_UP000001798_2026-10-26.fasta.gz \
+  --benchmark-train baselines/PCBert-Kla-original/data/train.csv \
+  --benchmark-test baselines/PCBert-Kla-original/data/test.csv \
+  --output-dir experiment/pcbert_kla_clean/outputs/gao_2020_reconstruction
+```
+
+The source files are local inputs and are not committed. The Gao supplement
+is linked from the [source article](https://doi.org/10.3389/fmicb.2020.594743);
+input checksums are written to `reconstruction_audit.json`. `reported_sites.csv`
+retains every source site and explains why a 51-residue window can or cannot
+be reconstructed. `candidate_sites.csv` lists eligible positives and
+unannotated lysines from the same source proteins. Potential controls whose
+site matches a reported modified peptide or whose window matches a known
+benchmark/source positive are excluded and, if present, listed separately.
+
+With the currently audited files, 273 reported Kla sites from 166 proteins
+produce 208 full 51-residue positive windows. Sixty sites are too close to a
+protein terminus; five have no accession in the dated proteome. The same
+proteins yield 4,945 unannotated lysines with full windows. These are
+**putative negatives**, not experimentally confirmed absence of Kla. No
+class balancing or train/validation/test assignment has been applied.
+
+This reconstruction does not yet resolve the reviewers' dataset concerns.
+Before model training, remaining candidate controls need independent
+positive-site screening and a fixed negative-sampling policy; proteins and
+qualifying homologues then need a locked split. Because Gao's sites overlap
+the original benchmark, a separate non-overlapping study is still needed
+for external testing. Baseline and proposed models must be rerun on the same
+locked partitions; historical scores cannot be compared directly to the
+new split.
+
 ## Candidate-Protein Group Diagnostic
 
 The candidate-mapping audit supports a stricter provisional split without
