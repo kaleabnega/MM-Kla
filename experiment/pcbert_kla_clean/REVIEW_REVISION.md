@@ -203,6 +203,40 @@ for external testing. Baseline and proposed models must be rerun on the same
 locked partitions; historical scores cannot be compared directly to the
 new split.
 
+### Internal Split Manifest
+
+An accession- and homology-cluster-disjoint internal split can be prepared
+from the reconstructed candidate sites. The script verifies the candidate
+CSV against its reconstruction audit before assigning sites and checks the
+existing MMseqs2 full-protein search for qualifying cross-partition hits.
+From the repository root:
+
+```bash
+python3 experiment/pcbert_kla_clean/scripts/prepare_source_split.py \
+  --candidate-csv experiment/pcbert_kla_clean/outputs/gao_2020_reconstruction/candidate_sites.csv \
+  --reconstruction-audit experiment/pcbert_kla_clean/outputs/gao_2020_reconstruction/reconstruction_audit.json \
+  --homology-csv experiment/pcbert_kla_clean/review_data/homology_clusters_mmseqs2.csv \
+  --homology-hits-tsv experiment/pcbert_kla_clean/review_data/all_vs_all_mmseqs2.tsv \
+  --output-dir experiment/pcbert_kla_clean/review_data/gao_2020_source_split
+```
+
+The fixed seed 42 manifest contains 3,599 training sites (145 reported
+positives), 519 validation sites (21 reported positives), and 1,035 internal
+test sites (42 reported positives). All 162 reconstructable source proteins
+are covered by the supplied clusters; zero qualifying cross-partition hits
+occur in the recorded search. The manifest and audit are versioned under
+`review_data/gao_2020_source_split/`. This remains a **provisional internal
+split** because the controls are putative negatives and no independent
+positive-site database has yet screened them. Its test subset must not be
+called an external dataset.
+
+The [KlaDB species list](https://kladb.wuxl-group.com/) does not include
+*B. cinerea*. A later [reanalysis of the *B. cinerea* proteomics data](https://doi.org/10.1038/s41592-022-01523-1)
+uses Gao's deposited PXD020746 dataset, so it is not an independent study.
+The [Meng et al. rice lactylome](https://doi.org/10.1021/acs.jafc.1c00760)
+is a candidate cross-species external study, but it requires separate
+accession/sequence validation and overlap screening before use.
+
 ## Candidate-Protein Group Diagnostic
 
 The candidate-mapping audit supports a stricter provisional split without

@@ -194,6 +194,10 @@ def main() -> None:
                 ("benchmark_test", args.benchmark_test),
             )
         },
+        "output_sha256": {
+            name: sha256(args.output_dir / name)
+            for name in ("reported_sites.csv", "candidate_sites.csv", "excluded_putative_negatives.csv")
+        },
         "counts": counts,
         "limitations": [
             "Only Gao-reported accession-position pairs are experimental positives.",

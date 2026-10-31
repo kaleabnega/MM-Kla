@@ -1,0 +1,54 @@
+{
+  "protocol": "source-derived accession and homology-cluster-disjoint internal split",
+  "seed": 42,
+  "requested_test_fraction": 0.2,
+  "requested_validation_fraction": 0.1,
+  "partitions": {
+    "train": {
+      "sites": 3599,
+      "reported_positive_sites": 145,
+      "putative_negative_sites": 3454,
+      "proteins": 110,
+      "homology_clusters": 108
+    },
+    "validation": {
+      "sites": 519,
+      "reported_positive_sites": 21,
+      "putative_negative_sites": 498,
+      "proteins": 19,
+      "homology_clusters": 19
+    },
+    "test": {
+      "sites": 1035,
+      "reported_positive_sites": 42,
+      "putative_negative_sites": 993,
+      "proteins": 33,
+      "homology_clusters": 33
+    }
+  },
+  "homology_search": {
+    "hits": 206,
+    "self_hits": 180,
+    "cross_partition_hits": 0
+  },
+  "limitations": [
+    "Negative sites are unannotated lysines, not experimentally verified non-lactylated sites.",
+    "Homology screen uses the supplied MMseqs2 threshold; weaker or local similarities may remain.",
+    "This is an internal split of Gao 2020 data, not an independent experimental study.",
+    "The candidate negatives have not yet been screened against an independent Kla site database.",
+    "No model training or test-set evaluation was performed by this script."
+  ],
+  "input_sha256": {
+    "candidate_csv": "0e0d6dce9e0c25a29faf204c64e22dc16125335313426c5961f40a929ac34bb7",
+    "reconstruction_audit": "98853e0cfd9c22c8247a4a383038f7d38c3daa791247677b9ee819aabf01f564",
+    "homology_csv": "8fffc04dcfa335d752acb195f94f05fc791dad3543528d1812abda82d5f2ffab",
+    "homology_hits_tsv": "3ca3bbf2fb38a131beda2133c0124fd273a9361decc214dca7428f6067bc240a"
+  },
+  "raw_source_sha256": {
+    "gao_xlsx": "b961095860dcc93ede817fd51b171cd336754ba2c47ccf376425c29b7ae50188",
+    "proteome_fasta": "d32997a41cf3bd3839ef55d404c839fdcf47d3065ceda780bbcc736aa1277258",
+    "benchmark_train": "5a2f2f220c4761b963b9c4487573f4d6fad516d820ef29837c8553075fa05824",
+    "benchmark_test": "f37a441710fb7198c17a104585ac723aa76afd51ff21dc31224aacb89b855d21"
+  },
+  "manifest_sha256": "e119d66bcc876490b2a44adb59596fd3b02a91ef0eb154ee7f6c411cc4a1b99c"
+}
