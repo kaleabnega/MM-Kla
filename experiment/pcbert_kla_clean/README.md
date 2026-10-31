@@ -96,6 +96,21 @@ An exploratory model run on that fixed diagnostic split is available with
 `--run window-diagnostic`. It uses the manifest's validation subset for model
 selection and fits feature scaling on the training subset only.
 
+The stricter candidate-protein audit joins all exact proteome matches for a
+window before partitioning. Ambiguous matches are kept together, so no mapped
+protein accession crosses the resulting split:
+
+```bash
+python3 scripts/run_replication.py --run candidate-group-audit
+```
+
+Its report and manifest are under `outputs/review_candidate_groups/`. Training
+on that fixed split uses `--run candidate-group-diagnostic`. These are
+provisional results: original parent-protein IDs are not verified, and a
+homology screen and external study-sourced test are still pending. The
+[revision protocol](REVIEW_REVISION.md) documents the full-protein clustering
+workflow and remaining evaluation requirements.
+
 ## Baseline Replication
 
 Five-fold cross-validation:

@@ -130,8 +130,9 @@ python3 scripts/run_replication.py --run data-check
 The data check does not download a protein language model. It validates the
 benchmark files and prints class counts, feature dimensions, duplicate sequence
 counts, and train/test overlap information. The reviewer audit is available via
-`python3 scripts/run_replication.py --run review-audit`; see the
-[revision protocol](experiment/pcbert_kla_clean/REVIEW_REVISION.md).
+`python3 scripts/run_replication.py --run review-audit`. A stricter provisional
+candidate-protein-group audit is available with `--run candidate-group-audit`;
+see the [revision protocol](experiment/pcbert_kla_clean/REVIEW_REVISION.md).
 
 ## Historical Single-Model Run
 

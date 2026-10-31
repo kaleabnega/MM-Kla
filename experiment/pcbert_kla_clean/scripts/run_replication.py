@@ -30,6 +30,8 @@ def parse_args() -> argparse.Namespace:
             "data-check",
             "review-audit",
             "window-diagnostic",
+            "candidate-group-audit",
+            "candidate-group-diagnostic",
             "cv",
             "independent",
             "ensemble-independent",
@@ -114,6 +116,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--review-split-seed", type=int, default=42)
     parser.add_argument("--review-test-fraction", type=float, default=0.2)
     parser.add_argument("--review-validation-fraction", type=float, default=0.1)
+    parser.add_argument(
+        "--candidate-mapping-csv",
+        type=Path,
+        default=PROJECT_DIR.parents[1]
+        / "experiment-1/structure_aware_kla/results/botrytis_b0510_window_mapping/all_window_matches.csv",
+    )
+    parser.add_argument(
+        "--homology-clusters-csv",
+        type=Path,
+        default=None,
+        help="Optional complete accession,cluster_id CSV from a documented full-protein clustering run.",
+    )
     parser.add_argument("--decision-threshold", type=float, default=0.5)
     parser.add_argument(
         "--calibrate-threshold",
@@ -155,7 +169,7 @@ def run_data_check(train_split, test_split) -> None:
 def main() -> None:
     args = parse_args()
     if args.monitor_metric is None:
-        args.monitor_metric = "AUPRC" if args.run == "window-diagnostic" else "ACC"
+        args.monitor_metric = "AUPRC" if args.run in {"window-diagnostic", "candidate-group-diagnostic"} else "ACC"
 
     train_split = load_split(
         args.baseline_root / "data" / "train.csv",
@@ -171,20 +185,32 @@ def main() -> None:
         return
 
     fixed_validation_indices = None
-    if args.run in {"review-audit", "window-diagnostic"}:
+    if args.run in {"review-audit", "window-diagnostic", "candidate-group-audit", "candidate-group-diagnostic"}:
         from pcbert_kla_clean.review_dataset import (
             combine_development_partitions,
             prepare_review_partitions,
             save_review_partitions,
         )
 
-        partitions = prepare_review_partitions(
-            train_split,
-            test_split,
+        split_kwargs = dict(
             seed=args.review_split_seed,
             test_fraction=args.review_test_fraction,
             validation_fraction=args.review_validation_fraction,
         )
+        if args.run in {"candidate-group-audit", "candidate-group-diagnostic"}:
+            from pcbert_kla_clean.candidate_groups import prepare_candidate_group_partitions
+
+            partitions = prepare_candidate_group_partitions(
+                train_split,
+                test_split,
+                mapping_csv=args.candidate_mapping_csv,
+                homology_csv=args.homology_clusters_csv,
+                **split_kwargs,
+            )
+            args.output_dir = args.output_dir / "review_candidate_groups"
+        else:
+            partitions = prepare_review_partitions(train_split, test_split, **split_kwargs)
+            args.output_dir = args.output_dir / "review_exact_window"
         partitions.report["source_file_sha256"] = {
             filename: hashlib.sha256(
                 (args.baseline_root / "data" / filename).read_bytes()
@@ -196,10 +222,9 @@ def main() -> None:
                 "feature_test.csv",
             )
         }
-        args.output_dir = args.output_dir / "review_exact_window"
         save_review_partitions(partitions, args.output_dir)
         print(json.dumps(partitions.report, indent=2, sort_keys=True))
-        if args.run == "review-audit":
+        if args.run in {"review-audit", "candidate-group-audit"}:
             return
         train_split, fixed_validation_indices = combine_development_partitions(partitions)
         test_split = partitions.test
@@ -209,11 +234,17 @@ def main() -> None:
     if args.site_token_index is None:
         args.site_token_index = infer_site_token_index(args.model_name)
     args.device = resolve_device(args.device)
-    if args.run == "window-diagnostic":
+    if args.run in {"window-diagnostic", "candidate-group-diagnostic"}:
         run_settings = {
             key: str(value) if isinstance(value, Path) else value
             for key, value in vars(args).items()
         }
+        run_settings["dataset_audit_sha256"] = hashlib.sha256(
+            (args.output_dir / "dataset_audit.json").read_bytes()
+        ).hexdigest()
+        run_settings["window_inventory_sha256"] = hashlib.sha256(
+            (args.output_dir / "window_inventory.csv").read_bytes()
+        ).hexdigest()
         run_id = hashlib.sha256(
             json.dumps(run_settings, sort_keys=True).encode("utf-8")
         ).hexdigest()[:12]
@@ -229,13 +260,17 @@ def main() -> None:
         run_cv(args, train_split)
     elif args.run == "independent":
         run_independent(args, train_split, test_split)
-    elif args.run == "window-diagnostic":
+    elif args.run in {"window-diagnostic", "candidate-group-diagnostic"}:
         run_independent(
             args,
             train_split,
             test_split,
             fixed_validation_indices=fixed_validation_indices,
-            result_label="Exact-window-disjoint diagnostic test:",
+            result_label=(
+                "Candidate-protein-group diagnostic test:"
+                if args.run == "candidate-group-diagnostic"
+                else "Exact-window-disjoint diagnostic test:"
+            ),
         )
     elif args.run == "ensemble-independent":
         run_ensemble_independent(args, train_split, test_split)

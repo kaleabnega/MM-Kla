@@ -81,9 +81,9 @@ These findings strongly connect the benchmark positives to the published
 *B. cinerea* lactylome, including the nominal training positives. They do not
 establish the original parent protein of every benchmark record, particularly
 the negatives, or resolve the discrepancy with the publications' description
-of rice-derived training data. The dataset authors should be asked for the
-original accession/site/label inventory before a verified protein-level
-partition is claimed.
+of rice-derived training data. Author clarification would help, but these
+records can be audited and evaluated without waiting for it. A verified
+original protein-level partition must not be claimed.
 
 These are **candidate sequence matches**, not verified source annotations.
 The original *DeepKla* and PCBert-Kla publications describe rice-derived
@@ -92,9 +92,8 @@ released training and test windows to the *B. cinerea* proteome. The benchmark
 files expose only generic `Protein N` names. The initial proteome FASTA was
 not retained, but the mapping has now been reproduced using the dated FASTA
 and checksums in the follow-up audit. Experimental source proteins,
-negative-label construction, and the species discrepancy still require
-confirmation from the original dataset authors. No biological label should
-be inferred merely from a sequence match.
+negative-label construction, and the species discrepancy remain unresolved.
+No biological label should be inferred merely from a sequence match.
 
 From the repository root, the audit can be rerun without a GPU:
 
@@ -161,6 +160,81 @@ The versioned full-protein FASTA is available. The remaining dependency is an
 authoritative accession/site/label table for all benchmark rows, including
 negatives. Until the records are reconciled, no protein-disjoint test set
 should be described as verified.
+
+## Candidate-Protein Group Diagnostic
+
+The candidate-mapping audit supports a stricter provisional split without
+assuming that each window has only one possible source protein. The command
+below first removes duplicate and contradictory windows, then joins all
+candidate proteins connected by any window, including excluded contradictory
+windows. Each connected group goes to one partition. The fixed seed 42 run
+contains 1,348 training windows (122 positive), 194 validation windows (17
+positive), and 390 test windows (35 positive); no candidate accession appears
+in two partitions. It is **not** a verified parent-protein split, a homology
+screen, or a previously unseen experimental study.
+
+From `experiment/pcbert_kla_clean/`:
+
+```bash
+python3 scripts/run_replication.py --run candidate-group-audit
+```
+
+The report and per-window manifest are written to
+`outputs/review_candidate_groups/`. To train on this provisional split, use
+`--run candidate-group-diagnostic` with the same model arguments used for
+`window-diagnostic`. All models in a comparison must use the same split seed,
+mapping file, and, when available, homology clusters. The output must be
+reported as a diagnostic, not as an independent test estimate.
+
+### Full-Protein Homology Clustering
+
+The dated B05.10 proteome file is a local audit input and is not committed to
+the repository. Once available at the path below, prepare a candidate-only
+FASTA from the repository root:
+
+```bash
+python3 experiment/pcbert_kla_clean/scripts/prepare_homology_clusters.py export-fasta \
+  --mapping-csv experiment-1/structure_aware_kla/results/botrytis_b0510_window_mapping/all_window_matches.csv \
+  --proteome-fasta experiment-1/structure_aware_kla/source_data/botrytis_b0510_proteome/uniprot_UP000001798_2026-10-26.fasta.gz \
+  --output-fasta experiment/pcbert_kla_clean/outputs/review_candidate_groups/candidate_proteins.fasta
+```
+
+With [MMseqs2](https://github.com/soedinglab/MMseqs2) installed, one
+explicit full-protein clustering criterion is 30% sequence identity and 80%
+coverage of both proteins. Record the MMseqs2 version and exact parameters:
+
+```bash
+mmseqs easy-cluster \
+  experiment/pcbert_kla_clean/outputs/review_candidate_groups/candidate_proteins.fasta \
+  experiment/pcbert_kla_clean/outputs/review_candidate_groups/mmseqs_clusters \
+  experiment/pcbert_kla_clean/outputs/review_candidate_groups/mmseqs_tmp \
+  --min-seq-id 0.3 -c 0.8 --cov-mode 0 --cluster-mode 1
+python3 experiment/pcbert_kla_clean/scripts/prepare_homology_clusters.py convert-tsv \
+  --mapping-csv experiment-1/structure_aware_kla/results/botrytis_b0510_window_mapping/all_window_matches.csv \
+  --cluster-tsv experiment/pcbert_kla_clean/outputs/review_candidate_groups/mmseqs_clusters_cluster.tsv \
+  --output-csv experiment/pcbert_kla_clean/outputs/review_candidate_groups/homology_clusters.csv
+```
+
+Then rerun the audit with
+`--homology-clusters-csv outputs/review_candidate_groups/homology_clusters.csv`.
+The command rejects incomplete cluster files and checks that no supplied
+cluster spans partitions. This criterion may miss remote or partial-domain
+similarity; describe it precisely rather than claiming that all homology is
+absent.
+
+## Remaining Evaluation
+
+Retrain MM-Kla and the principal PCBert-Kla baseline on the **same** revised
+training/validation/test manifest. Do not compare a revised-split score
+directly with the published overlap-affected score as if the tests were
+equivalent. An additional source-annotated external dataset, screened against
+the final training set, is needed to test transfer beyond the reused
+benchmark. [KlaDB](https://kladb.wuxl-group.com/download) is a candidate
+source, not yet a validated independent test for this project. Putative
+negative labels and any study/protein overlap must be documented. If the
+original benchmark cannot support a defensible grouped evaluation, move the
+main analysis to an accession-annotated dataset rather than implying that
+candidate mappings verify original provenance.
 
 For background on sequence leakage and non-overlapping group evaluation, see
 [Hou et al., PLOS Computational Biology (2022)](https://doi.org/10.1371/journal.pcbi.1010669)
