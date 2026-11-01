@@ -36,6 +36,7 @@ def parse_args() -> argparse.Namespace:
             "independent",
             "ensemble-independent",
             "source-study-check",
+            "source-study-development",
             "source-study",
         ],
         default="data-check",
@@ -77,6 +78,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--optimizer", choices=["sgd", "adamw"], default="sgd")
     parser.add_argument("--learning-rate", type=float, default=0.003)
     parser.add_argument("--weight-decay", type=float, default=0.0)
+    parser.add_argument(
+        "--positive-weighting",
+        choices=["none", "train_ratio"],
+        default="none",
+        help="Weight positive examples in training BCE by training negatives/positives.",
+    )
     parser.add_argument("--sgd-momentum", type=float, default=0.0)
     parser.add_argument("--adam-beta1", type=float, default=0.9)
     parser.add_argument("--adam-beta2", type=float, default=0.999)
@@ -182,9 +189,9 @@ def run_data_check(train_split, test_split) -> None:
 def main() -> None:
     args = parse_args()
     if args.monitor_metric is None:
-        args.monitor_metric = "AUPRC" if args.run in {"window-diagnostic", "candidate-group-diagnostic", "source-study"} else "ACC"
+        args.monitor_metric = "AUPRC" if args.run in {"window-diagnostic", "candidate-group-diagnostic", "source-study", "source-study-development"} else "ACC"
 
-    if args.run in {"source-study-check", "source-study"}:
+    if args.run in {"source-study-check", "source-study-development", "source-study"}:
         from pcbert_kla_clean.source_study import load_locked_partitions, sha256
 
         gao_path = PROJECT_DIR / "review_data/gao_2020_source_split/source_split_manifest.csv"
@@ -225,13 +232,21 @@ def main() -> None:
         run_id = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:12]
         output_dir = args.output_dir / "source_study" / "runs" / run_id
         print(f"Source-study run output: {output_dir}")
+        development_only = args.run == "source-study-development"
         result = train_and_predict_independent(
-            args, development, internal_test, seed=args.seed,
+            args, development, None if development_only else internal_test, seed=args.seed,
             tokenizer=load_tokenizer(args.model_name, args.cache_dir),
             device=torch.device(args.device), output_dir=output_dir,
             fixed_validation_indices=validation_indices,
-            extra_test_splits={"rice_external": rice_external},
+            extra_test_splits=None if development_only else {"rice_external": rice_external},
         )
+        if development_only:
+            print("\nGao validation (development only):")
+            print(json.dumps(
+                {"loss": result["validation_loss"], **result["validation_metrics"]},
+                indent=2, sort_keys=True,
+            ))
+            return
         print("\nGao internal test:")
         print(json.dumps({"loss": result["loss"], **result["metrics"]}, indent=2, sort_keys=True))
         print("\nRice study-held-out test (putative negatives):")

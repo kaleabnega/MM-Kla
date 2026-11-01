@@ -36,6 +36,8 @@ class SourceStudyTests(unittest.TestCase):
             self.gao, self.rice, self.lock
         )
         self.assertEqual((len(development.records) - len(validation_idx), len(validation_idx), len(internal.records), len(external.records)), (3599, 519, 1035, 4773))
+        training_idx = np.setdiff1d(np.arange(len(development.records)), validation_idx)
+        self.assertEqual((int(development.labels[training_idx].sum()), len(training_idx) - int(development.labels[training_idx].sum())), (145, 3454))
         self.assertEqual(int(external.labels.sum()), 409)
         self.assertEqual(development.feature_names, FEATURE_NAMES)
         self.assertEqual(development.features.shape[1], 27)

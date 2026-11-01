@@ -5,6 +5,7 @@ from argparse import Namespace
 import numpy as np
 import torch
 from torch import nn
+from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
@@ -14,6 +15,45 @@ from pcbert_kla_clean.model import (
     PCBertKla,
     TokenGatedPCBertKla,
 )
+
+
+class PositiveWeightedBCELoss(nn.Module):
+    def __init__(self, positive_weight: float):
+        super().__init__()
+        if not np.isfinite(positive_weight) or positive_weight <= 0:
+            raise ValueError("Positive weight must be finite and greater than zero")
+        self.positive_weight = float(positive_weight)
+
+    def forward(self, probabilities: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        weights = torch.where(labels == 1, self.positive_weight, 1.0)
+        return F.binary_cross_entropy(probabilities, labels, weight=weights)
+
+
+def make_training_criterion(
+    labels: np.ndarray,
+    train_indices: np.ndarray,
+    weighting: str,
+) -> tuple[nn.Module, dict[str, float | int]]:
+    training_labels = np.asarray(labels)[train_indices]
+    positives = int(np.count_nonzero(training_labels == 1))
+    negatives = int(np.count_nonzero(training_labels == 0))
+    if positives + negatives != len(training_labels) or not len(training_labels):
+        raise ValueError("Training labels must be nonempty and binary")
+    if weighting == "none":
+        positive_weight = 1.0
+        criterion = nn.BCELoss()
+    elif weighting == "train_ratio":
+        if not positives or not negatives:
+            raise ValueError("Ratio weighting requires both training classes")
+        positive_weight = negatives / positives
+        criterion = PositiveWeightedBCELoss(positive_weight)
+    else:
+        raise ValueError(f"Unsupported positive weighting: {weighting}")
+    return criterion, {
+        "training_positive_rows": positives,
+        "training_negative_rows": negatives,
+        "training_positive_weight": positive_weight,
+    }
 
 
 def train_one_epoch(

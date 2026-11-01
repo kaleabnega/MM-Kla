@@ -11,6 +11,14 @@ repository using a Kaggle Secret, records the environment and commit, checks
 the locked inputs, and executes matched baseline and token-gated runs. It
 does not replace the historical `main.ipynb` workbook.
 
+The [Kaggle weighted-development notebook](kaggle_weighted_development.ipynb)
+compares unweighted and training-set-ratio-weighted BCE for both architectures
+on the locked Gao training and validation partitions. It does not evaluate Gao
+internal test or rice. The weighting is computed separately from each run's
+training indices, while checkpoint selection uses unweighted validation AUPRC.
+The original model outputs are probabilities, so this implementation weights
+the existing probability-based BCE rather than applying a logits loss to them.
+
 The original train/test benchmark has exact sequence overlap. Previous metrics
 remain available for historical comparison, but they do not establish
 performance on unseen proteins. The current revision protocol and audit are
@@ -82,6 +90,25 @@ the source windows at load time. Run
 `python3 scripts/run_replication.py --run source-study-check` before training.
 The rice set has putative negatives and must not be described as a set of
 experimentally verified non-Kla sites.
+
+The first source-study test results have already been inspected. Subsequent
+architecture or loss changes must be developed on Gao training/validation;
+reusing the same test sets afterward is a follow-up evaluation, not a new
+untouched blind test. For a local validation-only weighting comparison:
+
+```bash
+python3 scripts/run_replication.py \
+  --run source-study-development \
+  --architecture token_gated \
+  --positive-weighting train_ratio \
+  --epochs 30 --batch-size 4 --device cuda \
+  --optimizer sgd --learning-rate 0.003 \
+  --weight-decay 0 --scheduler none
+```
+
+This saves `validation_metrics.json`, `validation_predictions.csv`, and a run
+configuration containing the training class counts and applied positive weight.
+Omit `--positive-weighting` for the unchanged unweighted control.
 
 ## Setup
 

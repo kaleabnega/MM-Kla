@@ -30,6 +30,7 @@ from pcbert_kla_clean.training import (
     build_optimizer,
     build_scheduler,
     evaluate,
+    make_training_criterion,
     predict,
     train_one_epoch,
 )
@@ -129,7 +130,10 @@ def run_cv(args: Namespace, train_split: KlaSplit) -> None:
             sequence_format,
         )
         model = build_model(args, feature_dim=train_split.features.shape[1], device=device)
-        criterion = nn.BCELoss()
+        train_criterion, _ = make_training_criterion(
+            labels, train_idx, getattr(args, "positive_weighting", "none")
+        )
+        eval_criterion = nn.BCELoss()
         optimizer = build_optimizer(args, model)
         scheduler = build_scheduler(args, optimizer, steps_per_epoch=len(train_loader))
 
@@ -142,14 +146,14 @@ def run_cv(args: Namespace, train_split: KlaSplit) -> None:
                 model,
                 train_loader,
                 optimizer,
-                criterion,
+                train_criterion,
                 device,
                 scheduler=scheduler,
             )
             val_loss, metrics = evaluate(
                 model,
                 val_loader,
-                criterion,
+                eval_criterion,
                 device,
                 threshold=args.decision_threshold,
             )
@@ -191,7 +195,7 @@ def run_cv(args: Namespace, train_split: KlaSplit) -> None:
 def train_and_predict_independent(
     args: Namespace,
     train_split: KlaSplit,
-    test_split: KlaSplit,
+    test_split: KlaSplit | None,
     seed: int,
     tokenizer,
     device: torch.device,
@@ -224,13 +228,20 @@ def train_and_predict_independent(
     else:
         train_idx = np.arange(len(train_split.labels))
         val_idx = np.array([], dtype=int)
+    if test_split is None and not len(val_idx):
+        raise ValueError("A validation partition is required for development-only runs")
+    if test_split is None and extra_test_splits:
+        raise ValueError("Development-only runs cannot include test partitions")
 
     scaler = MinMaxScaler()
     scaled_train = np.zeros_like(train_split.features, dtype=np.float32)
     scaled_train[train_idx] = scaler.fit_transform(train_split.features[train_idx])
     if len(val_idx):
         scaled_train[val_idx] = scaler.transform(train_split.features[val_idx])
-    scaled_test = scaler.transform(test_split.features).astype(np.float32)
+    scaled_test = (
+        scaler.transform(test_split.features).astype(np.float32)
+        if test_split is not None else None
+    )
 
     train_loader = make_loader(
         train_split,
@@ -256,20 +267,20 @@ def train_and_predict_independent(
         if len(val_idx)
         else None
     )
-    test_indices = np.arange(len(test_split.labels))
-    test_loader = make_loader(
-        test_split,
-        test_indices,
-        scaled_test,
-        tokenizer,
-        args.batch_size,
-        False,
-        args.max_length,
-        sequence_format,
+    test_indices = np.arange(len(test_split.labels)) if test_split is not None else None
+    test_loader = (
+        make_loader(
+            test_split, test_indices, scaled_test, tokenizer, args.batch_size,
+            False, args.max_length, sequence_format,
+        )
+        if test_split is not None else None
     )
 
     model = build_model(args, feature_dim=train_split.features.shape[1], device=device)
-    criterion = nn.BCELoss()
+    train_criterion, class_counts = make_training_criterion(
+        train_split.labels, train_idx, getattr(args, "positive_weighting", "none")
+    )
+    eval_criterion = nn.BCELoss()
     optimizer = build_optimizer(args, model)
     scheduler = build_scheduler(args, optimizer, steps_per_epoch=len(train_loader))
 
@@ -285,7 +296,7 @@ def train_and_predict_independent(
             model,
             train_loader,
             optimizer,
-            criterion,
+            train_criterion,
             device,
             scheduler=scheduler,
         )
@@ -293,7 +304,7 @@ def train_and_predict_independent(
             val_loss, val_metrics = evaluate(
                 model,
                 val_loader,
-                criterion,
+                eval_criterion,
                 device,
                 threshold=args.decision_threshold,
             )
@@ -331,7 +342,7 @@ def train_and_predict_independent(
             raise ValueError(
                 "--calibrate-threshold requires --validation-fraction greater than 0"
             )
-        val_loss, val_labels, val_scores = predict(model, val_loader, criterion, device)
+        val_loss, val_labels, val_scores = predict(model, val_loader, eval_criterion, device)
         threshold, validation_threshold_metrics = find_best_threshold(
             val_labels,
             val_scores,
@@ -363,7 +374,55 @@ def train_and_predict_independent(
                 threshold,
             )
 
-    test_loss, test_labels, test_scores = predict(model, test_loader, criterion, device)
+    run_config = {
+        key: str(value) if isinstance(value, Path) else value
+        for key, value in vars(args).items()
+    }
+    run_config.update(
+        {
+            "model_seed": seed,
+            "fixed_validation_partition": fixed_validation_indices is not None,
+            "training_rows": int(len(train_idx)),
+            "validation_rows": int(len(val_idx)),
+            "test_rows": int(len(test_indices)) if test_indices is not None else 0,
+            "extra_test_rows": {
+                name: len(split.records) for name, split in (extra_test_splits or {}).items()
+            },
+            "completed_epochs": completed_epochs,
+            "selected_epoch": best_epoch,
+            "selected_by": args.monitor_metric if best_epoch is not None else "last_epoch",
+            "decision_threshold_used": threshold,
+            "threshold_source": threshold_source,
+            **class_counts,
+        }
+    )
+
+    if test_split is None:
+        val_loss, val_labels, val_scores = predict(model, val_loader, eval_criterion, device)
+        val_metrics = compute_binary_metrics(val_labels, val_scores, threshold=threshold)
+        if output_dir is not None:
+            (output_dir / "run_config.json").write_text(
+                json.dumps(run_config, indent=2, sort_keys=True) + "\n"
+            )
+            (output_dir / "validation_metrics.json").write_text(
+                json.dumps({"loss": val_loss, **val_metrics}, indent=2, sort_keys=True) + "\n"
+            )
+            if args.save_predictions:
+                save_predictions(
+                    output_dir / "validation_predictions.csv",
+                    train_split, val_idx, val_scores, threshold,
+                )
+            if args.save_models:
+                torch.save(model.state_dict(), output_dir / f"{args.architecture}_development.pt")
+                joblib.dump(scaler, output_dir / "feature_scaler_development.joblib")
+        result = {"seed": seed, "validation_loss": val_loss, "validation_metrics": val_metrics}
+        del model
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+        gc.collect()
+        return result
+
+    test_loss, test_labels, test_scores = predict(model, test_loader, eval_criterion, device)
     test_metrics = compute_binary_metrics(test_labels, test_scores, threshold=threshold)
     extra_metrics: dict[str, dict[str, float]] = {}
     for name, split in (extra_test_splits or {}).items():
@@ -374,7 +433,7 @@ def train_and_predict_independent(
             split, indices, scaler.transform(split.features).astype(np.float32),
             tokenizer, args.batch_size, False, args.max_length, sequence_format,
         )
-        extra_loss, extra_labels, extra_scores = predict(model, extra_loader, criterion, device)
+        extra_loss, extra_labels, extra_scores = predict(model, extra_loader, eval_criterion, device)
         extra_metrics[name] = {"loss": extra_loss, **compute_binary_metrics(extra_labels, extra_scores, threshold=threshold)}
         if output_dir is not None:
             (output_dir / f"{name}_metrics.json").write_text(
@@ -384,27 +443,6 @@ def train_and_predict_independent(
                 save_predictions(output_dir / f"{name}_predictions.csv", split, indices, extra_scores, threshold)
 
     if output_dir is not None:
-        run_config = {
-            key: str(value) if isinstance(value, Path) else value
-            for key, value in vars(args).items()
-        }
-        run_config.update(
-            {
-                "model_seed": seed,
-                "fixed_validation_partition": fixed_validation_indices is not None,
-                "training_rows": int(len(train_idx)),
-                "validation_rows": int(len(val_idx)),
-                "test_rows": int(len(test_indices)),
-                "extra_test_rows": {
-                    name: len(split.records) for name, split in (extra_test_splits or {}).items()
-                },
-                "completed_epochs": completed_epochs,
-                "selected_epoch": best_epoch,
-                "selected_by": args.monitor_metric if best_epoch is not None else "last_epoch",
-                "decision_threshold_used": threshold,
-                "threshold_source": threshold_source,
-            }
-        )
         (output_dir / "run_config.json").write_text(
             json.dumps(run_config, indent=2, sort_keys=True) + "\n"
         )
