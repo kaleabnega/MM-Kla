@@ -5,6 +5,12 @@ and the proposed token-gated Kla prediction framework. The code is organized as
 a reproducible command-line and notebook workflow for local GPU environments
 and Google Colab.
 
+The [Kaggle source-study notebook](kaggle_source_study.ipynb) is a separate,
+minimal runner for the locked Gao/rice evaluation. It clones the private
+repository using a Kaggle Secret, records the environment and commit, checks
+the locked inputs, and executes matched baseline and token-gated runs. It
+does not replace the historical `main.ipynb` workbook.
+
 The original train/test benchmark has exact sequence overlap. Previous metrics
 remain available for historical comparison, but they do not establish
 performance on unseen proteins. The current revision protocol and audit are
