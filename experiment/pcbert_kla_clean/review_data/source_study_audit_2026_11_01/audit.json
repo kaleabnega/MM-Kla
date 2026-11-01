@@ -1,0 +1,81 @@
+{
+  "cross_study_exact_window_overlap": {
+    "rice_vs_soybean": 4,
+    "rice_vs_wheat": 3,
+    "wheat_vs_soybean": 1
+  },
+  "curated_studies": {
+    "rice": {
+      "accessions": 335,
+      "curated_site_rows": 626,
+      "distinct_accession_position_sites": 626,
+      "distinct_unpadded_windows": 529,
+      "invalid_center_rows": 0,
+      "missing_accession_rows": 0,
+      "repeated_unpadded_window_rows": 0,
+      "unpadded_51aa_rows": 529
+    },
+    "soybean": {
+      "accessions": 327,
+      "curated_site_rows": 783,
+      "distinct_accession_position_sites": 783,
+      "distinct_unpadded_windows": 550,
+      "invalid_center_rows": 0,
+      "missing_accession_rows": 0,
+      "repeated_unpadded_window_rows": 136,
+      "unpadded_51aa_rows": 686
+    },
+    "wheat": {
+      "accessions": 376,
+      "curated_site_rows": 895,
+      "distinct_accession_position_sites": 895,
+      "distinct_unpadded_windows": 720,
+      "invalid_center_rows": 0,
+      "missing_accession_rows": 0,
+      "repeated_unpadded_window_rows": 0,
+      "unpadded_51aa_rows": 720
+    }
+  },
+  "exact_window_overlap": {
+    "rice": {
+      "gao_candidate_windows": 0,
+      "original_benchmark_windows": 0
+    },
+    "soybean": {
+      "gao_candidate_windows": 0,
+      "original_benchmark_windows": 0
+    },
+    "wheat": {
+      "gao_candidate_windows": 0,
+      "original_benchmark_windows": 0
+    }
+  },
+  "inputs_sha256": {
+    "benchmark_test": "f37a441710fb7198c17a104585ac723aa76afd51ff21dc31224aacb89b855d21",
+    "benchmark_train": "5a2f2f220c4761b963b9c4487573f4d6fad516d820ef29837c8553075fa05824",
+    "gao_candidates": "0e0d6dce9e0c25a29faf204c64e22dc16125335313426c5961f40a929ac34bb7",
+    "kladb_sites": "4a54ea937411ee21f7a7bdf3dcd2448205a97e5276a856242085b55f1c66ed26",
+    "rice_proteome": "562f03b3650d3a9b6e39b5770bd107a394c49537ee3bc7e9a13a145c9f3f05fc",
+    "rice_table": "eac6073f4853ca17762dc07806e477b80b754f6292a78f8968dd43540c897dc9"
+  },
+  "limitations": [
+    "Wheat and soybean curated rows have not been checked against their original supplementary tables or a versioned proteome.",
+    "Exact 51-aa window disjointness does not establish full-protein homology disjointness.",
+    "Only experimentally reported rice positives are exported; no negative labels or external test set are established."
+  ],
+  "rice_primary_sequence_audit": {
+    "curated_sites_matching_primary_accession_and_position": 626,
+    "curated_sites_not_in_primary_table": 0,
+    "distinct_verified_windows": 529,
+    "primary_accessions": 342,
+    "primary_rows": 638,
+    "primary_sites_not_in_curated_release": 12,
+    "proteome_protein_count": 61200,
+    "site_status_counts": {
+      "accession_absent_from_proteome": 11,
+      "primary_and_curated_window_verified": 529,
+      "reported_position_not_lysine": 1,
+      "site_too_close_to_terminus": 97
+    }
+  }
+}

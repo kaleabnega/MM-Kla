@@ -234,8 +234,12 @@ The [KlaDB species list](https://kladb.wuxl-group.com/) does not include
 *B. cinerea*. A later [reanalysis of the *B. cinerea* proteomics data](https://doi.org/10.1038/s41592-022-01523-1)
 uses Gao's deposited PXD020746 dataset, so it is not an independent study.
 The [Meng et al. rice lactylome](https://doi.org/10.1021/acs.jafc.1c00760)
-is a candidate cross-species external study, but it requires separate
-accession/sequence validation and overlap screening before use.
+is a candidate cross-species external study. A [dated source audit](review_data/source_study_audit_2026_11_01/README.md)
+has now verified 529 rice positive-site windows against the primary table,
+UniProt sequences, and KlaDB. There is no exact 51-aa window overlap with
+Gao candidates, but protein-homology screening and a defensible putative-
+negative policy are still required before this can be an external binary
+test. Wheat and soybean remain unverified candidate studies.
 
 ## Candidate-Protein Group Diagnostic
 
