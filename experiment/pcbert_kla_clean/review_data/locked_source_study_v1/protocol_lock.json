@@ -1,0 +1,17 @@
+{
+  "external_label_counts": {
+    "0": 4364,
+    "1": 409
+  },
+  "external_manifest_sha256": "4096f8eb1faf31473e137bd4cb6c8ecb22d4ac7e9635536eb62055a6f086314b",
+  "external_rows": 4773,
+  "gao_manifest_sha256": "e119d66bcc876490b2a44adb59596fd3b02a91ef0eb154ee7f6c411cc4a1b99c",
+  "gao_source_audit_sha256": "768f145eef0f1e93f94f82db54df50369b77a9d6cde1f6f54222812dfe396846",
+  "model_selection": "Gao validation only; rice external test never used for selection",
+  "negative_label_definition": "unannotated lysine; putative negative, not experimentally confirmed non-Kla",
+  "protocol": "Gao protein/homology-cluster split; rice study-held-out external test",
+  "rice_duplicate_window_policy": "retain lexicographically first accession, then lowest position",
+  "rice_homology_audit_sha256": "dba96dd93aa05bb0ad2c2828ce4eec890499536fab243c6ad1d80d6557e50331",
+  "rice_repeated_window_rows_removed": 20,
+  "rice_screened_candidates_sha256": "e1f60f7aaed2457ba78e59b7152f18e1dd283cb206c4f020af9a39e1b40ffcda"
+}

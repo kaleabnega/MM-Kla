@@ -12,7 +12,8 @@ split does not support an independent-generalization claim.
 
 The goal is to improve Kla site prediction while establishing reliable
 evaluation. Earlier experiments used the same training and nominal test files
-as the baseline paper. Reviewer-driven evaluation revision is now in progress.
+as the baseline paper. A source-derived replacement evaluation is now locked;
+corrected model training and reporting remain to be completed.
 
 The active proposed model combines:
 
@@ -82,7 +83,7 @@ experiment-1/
 
 ## Dataset
 
-The active experiments use the original PCBert-Kla benchmark files:
+Historical replication experiments use the original PCBert-Kla benchmark files:
 
 ```text
 baselines/PCBert-Kla-original/data/train.csv
@@ -95,6 +96,11 @@ The sequence input is a 51-amino-acid window centered on a candidate lysine.
 The tabular input contains 27 physicochemical and residue-composition features.
 The original train/test split is preserved for historical replication. The
 review audit also constructs an exact-window-disjoint diagnostic partition.
+The corrected evaluation instead uses accession-labelled Gao 2020
+train/validation/internal-test partitions and a screened Meng 2021 rice
+study-held-out set. The data lock, label caveats, and matched-model commands
+are in [the source-study protocol](experiment/pcbert_kla_clean/review_data/locked_source_study_v1/README.md).
+No model metrics from that corrected evaluation are reported yet.
 
 ## Historical Results on the Overlap-Affected Benchmark
 

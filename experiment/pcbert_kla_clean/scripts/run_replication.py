@@ -35,10 +35,17 @@ def parse_args() -> argparse.Namespace:
             "cv",
             "independent",
             "ensemble-independent",
+            "source-study-check",
+            "source-study",
         ],
         default="data-check",
     )
     parser.add_argument("--model-name", default="Rostlab/prot_bert")
+    parser.add_argument(
+        "--source-lock",
+        type=Path,
+        default=PROJECT_DIR / "review_data/locked_source_study_v1/protocol_lock.json",
+    )
     parser.add_argument(
         "--sequence-format",
         choices=["auto", "protbert_spaced", "prott5_spaced", "raw"],
@@ -175,7 +182,61 @@ def run_data_check(train_split, test_split) -> None:
 def main() -> None:
     args = parse_args()
     if args.monitor_metric is None:
-        args.monitor_metric = "AUPRC" if args.run in {"window-diagnostic", "candidate-group-diagnostic"} else "ACC"
+        args.monitor_metric = "AUPRC" if args.run in {"window-diagnostic", "candidate-group-diagnostic", "source-study"} else "ACC"
+
+    if args.run in {"source-study-check", "source-study"}:
+        from pcbert_kla_clean.source_study import load_locked_partitions, sha256
+
+        gao_path = PROJECT_DIR / "review_data/gao_2020_source_split/source_split_manifest.csv"
+        rice_path = PROJECT_DIR / "review_data/source_study_audit_2026_11_01/rice_homology_screened_candidates.csv"
+        development, validation_indices, internal_test, rice_external = load_locked_partitions(
+            gao_path, rice_path, args.source_lock
+        )
+        report = {
+            "training_rows": len(development.records) - len(validation_indices),
+            "validation_rows": len(validation_indices),
+            "internal_test_rows": len(internal_test.records),
+            "external_rice_rows": len(rice_external.records),
+            "source_lock_sha256": sha256(args.source_lock),
+        }
+        print(json.dumps(report, indent=2, sort_keys=True))
+        if args.run == "source-study-check":
+            return
+        if args.ablation != "none":
+            raise ValueError("Source-study primary comparison requires --ablation none")
+        if args.calibrate_threshold != "none":
+            raise ValueError("Source-study primary comparison uses the predeclared fixed threshold")
+        if args.monitor_metric != "AUPRC" or args.decision_threshold != 0.5:
+            raise ValueError("Source-study primary comparison requires validation AUPRC and threshold 0.5")
+        from pcbert_kla_clean.backbones import infer_site_token_index, load_tokenizer
+        from pcbert_kla_clean.experiments import train_and_predict_independent
+        import torch
+
+        if args.site_token_index is None:
+            args.site_token_index = infer_site_token_index(args.model_name)
+        args.device = resolve_device(args.device)
+        args.source_lock_sha256 = report["source_lock_sha256"]
+        config = {
+            key: str(value) if isinstance(value, Path) else value
+            for key, value in vars(args).items()
+            if key != "output_dir"
+        }
+        config["source_lock_sha256"] = report["source_lock_sha256"]
+        run_id = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:12]
+        output_dir = args.output_dir / "source_study" / "runs" / run_id
+        print(f"Source-study run output: {output_dir}")
+        result = train_and_predict_independent(
+            args, development, internal_test, seed=args.seed,
+            tokenizer=load_tokenizer(args.model_name, args.cache_dir),
+            device=torch.device(args.device), output_dir=output_dir,
+            fixed_validation_indices=validation_indices,
+            extra_test_splits={"rice_external": rice_external},
+        )
+        print("\nGao internal test:")
+        print(json.dumps({"loss": result["loss"], **result["metrics"]}, indent=2, sort_keys=True))
+        print("\nRice study-held-out test (putative negatives):")
+        print(json.dumps(result["extra_metrics"]["rice_external"], indent=2, sort_keys=True))
+        return
 
     train_split = load_split(
         args.baseline_root / "data" / "train.csv",

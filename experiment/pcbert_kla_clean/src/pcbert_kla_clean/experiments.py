@@ -197,6 +197,7 @@ def train_and_predict_independent(
     device: torch.device,
     output_dir: Path | None = None,
     fixed_validation_indices: np.ndarray | None = None,
+    extra_test_splits: dict[str, KlaSplit] | None = None,
 ) -> dict[str, object]:
     set_seed(seed)
     device = torch.device(args.device)
@@ -364,6 +365,23 @@ def train_and_predict_independent(
 
     test_loss, test_labels, test_scores = predict(model, test_loader, criterion, device)
     test_metrics = compute_binary_metrics(test_labels, test_scores, threshold=threshold)
+    extra_metrics: dict[str, dict[str, float]] = {}
+    for name, split in (extra_test_splits or {}).items():
+        if not name.isidentifier():
+            raise ValueError(f"Invalid extra test name: {name}")
+        indices = np.arange(len(split.labels))
+        extra_loader = make_loader(
+            split, indices, scaler.transform(split.features).astype(np.float32),
+            tokenizer, args.batch_size, False, args.max_length, sequence_format,
+        )
+        extra_loss, extra_labels, extra_scores = predict(model, extra_loader, criterion, device)
+        extra_metrics[name] = {"loss": extra_loss, **compute_binary_metrics(extra_labels, extra_scores, threshold=threshold)}
+        if output_dir is not None:
+            (output_dir / f"{name}_metrics.json").write_text(
+                json.dumps(extra_metrics[name], indent=2, sort_keys=True) + "\n"
+            )
+            if args.save_predictions:
+                save_predictions(output_dir / f"{name}_predictions.csv", split, indices, extra_scores, threshold)
 
     if output_dir is not None:
         run_config = {
@@ -377,6 +395,9 @@ def train_and_predict_independent(
                 "training_rows": int(len(train_idx)),
                 "validation_rows": int(len(val_idx)),
                 "test_rows": int(len(test_indices)),
+                "extra_test_rows": {
+                    name: len(split.records) for name, split in (extra_test_splits or {}).items()
+                },
                 "completed_epochs": completed_epochs,
                 "selected_epoch": best_epoch,
                 "selected_by": args.monitor_metric if best_epoch is not None else "last_epoch",
@@ -420,6 +441,7 @@ def train_and_predict_independent(
         "test_scores": test_scores,
         "test_indices": test_indices,
         "validation_threshold_metrics": validation_threshold_metrics,
+        "extra_metrics": extra_metrics,
     }
 
     del model

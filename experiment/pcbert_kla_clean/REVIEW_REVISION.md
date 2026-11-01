@@ -345,19 +345,26 @@ version and input checksums are in [the artifact record](review_data/README.md).
 This criterion may miss remote or partial-domain similarity; describe it
 precisely rather than claiming that all homology is absent.
 
-## Remaining Evaluation
+## Locked Source-Study Evaluation and Remaining Work
 
-Retrain MM-Kla and the principal PCBert-Kla baseline on the **same** revised
-training/validation/test manifest. Do not compare a revised-split score
-directly with the published overlap-affected score as if the tests were
-equivalent. An additional source-annotated external dataset, screened against
-the final training set, is needed to test transfer beyond the reused
-benchmark. [KlaDB](https://kladb.wuxl-group.com/download) is a candidate
-source, not yet a validated independent test for this project. Putative
-negative labels and any study/protein overlap must be documented. If the
-original benchmark cannot support a defensible grouped evaluation, move the
-main analysis to an accession-annotated dataset rather than implying that
-candidate mappings verify original provenance.
+The accession-labelled Gao source split and screened rice study-held-out set
+are now frozen as [locked source-study evaluation v1](review_data/locked_source_study_v1/README.md).
+The Gao train/validation/internal-test partitions contain 3,599/519/1,035
+rows, respectively. The rice external manifest contains 4,773 unique windows
+after deterministic removal of 20 repeated-window rows. The 27 original
+feature definitions were recomputed from the source windows and verified
+against all 3,841 original feature rows. Both architectures can now be
+trained and evaluated through `--run source-study` with the same fixed split.
+
+**Still to do:** run PCBert-Kla and MM-Kla on the locked protocol, preserve
+the model outputs, and update the manuscript tables and claims. No corrected
+model metrics exist yet. The 0 labels are screened but putative negatives,
+not laboratory-confirmed absence of Kla; residual false-negative labels and
+unseen remote homology remain limitations. The rice set is a cross-species
+transfer test, not a same-species independent cohort. The original benchmark
+scores must not be compared directly with new-split scores as though they
+used the same test set. Do not use the rice outcomes to pick a model and then
+call that same evaluation untouched external validation.
 
 For background on sequence leakage and non-overlapping group evaluation, see
 [Hou et al., PLOS Computational Biology (2022)](https://doi.org/10.1371/journal.pcbi.1010669)

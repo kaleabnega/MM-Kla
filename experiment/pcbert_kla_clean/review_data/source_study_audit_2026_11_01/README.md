@@ -2,6 +2,8 @@
 
 This audit evaluates three independently published lactylation studies as potential sources for a corrected, accession-labelled benchmark. It does **not** establish a finished external test set.
 
+**Subsequent status:** the screened rice candidates were deduplicated and frozen as the [locked source-study evaluation v1](../locked_source_study_v1/README.md). The sections below preserve the earlier candidate-stage audit and its decision gate; the remaining negative-label limitation still applies.
+
 ## Sources and Reproduction
 
 | Input | Origin | Recorded identifier |

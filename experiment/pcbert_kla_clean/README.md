@@ -11,6 +11,8 @@ performance on unseen proteins. The current revision protocol and audit are
 documented in [REVIEW_REVISION.md](REVIEW_REVISION.md).
 The 27 descriptors and their verified computation are documented in
 [FEATURES.md](FEATURES.md).
+The source-derived, locked Gao/rice evaluation is documented in
+[locked_source_study_v1](review_data/locked_source_study_v1/README.md).
 
 ## Directory Structure
 
@@ -51,10 +53,12 @@ experiment/pcbert_kla_clean/
   classification.
 - Backbone comparison with ProtBert, ESM-2, ProtT5, and Ankh.
 - Component ablations for the token-gated architecture.
+- Accession-labelled Gao train/validation/internal-test and rice
+  study-held-out external evaluation, with source-file hash checks.
 
 ## Data
 
-All active experiments use the original benchmark files under:
+Historical replication experiments use the original benchmark files under:
 
 ```text
 baselines/PCBert-Kla-original/data/
@@ -64,6 +68,14 @@ The benchmark consists of 51-amino-acid windows centered on a candidate lysine
 and 27 physicochemical or residue-composition features. The original split is
 retained for historical replication; publication claims require a corrected
 evaluation on matched partitions.
+
+The corrected source-study workflow instead uses the locked manifests under
+`review_data/gao_2020_source_split/` and
+`review_data/locked_source_study_v1/`. It computes the same 27 features from
+the source windows at load time. Run
+`python3 scripts/run_replication.py --run source-study-check` before training.
+The rice set has putative negatives and must not be described as a set of
+experimentally verified non-Kla sites.
 
 ## Setup
 
