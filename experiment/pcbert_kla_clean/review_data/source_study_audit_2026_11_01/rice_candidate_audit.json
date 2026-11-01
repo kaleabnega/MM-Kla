@@ -1,0 +1,31 @@
+{
+  "candidate_csv_sha256": "bd5c86f02cf19caffbed2c19abe4ea7fb216c2a7daa96dc8a8e43c82e634bff8",
+  "counts": {
+    "candidate_proteins": 291,
+    "candidate_sites_total": 6136,
+    "distinct_candidate_windows": 6097,
+    "excluded_development_window": 4,
+    "excluded_known_positive_window": 6,
+    "excluded_modified_peptide_match": 35,
+    "putative_negative_sites": 5607,
+    "repeated_window_rows": 39,
+    "unreported_lysine_near_terminus": 842,
+    "verified_positive_sites": 529
+  },
+  "development_windows_screened": 5178,
+  "input_sha256": {
+    "benchmark_test": "f37a441710fb7198c17a104585ac723aa76afd51ff21dc31224aacb89b855d21",
+    "benchmark_train": "5a2f2f220c4761b963b9c4487573f4d6fad516d820ef29837c8553075fa05824",
+    "gao_candidates": "0e0d6dce9e0c25a29faf204c64e22dc16125335313426c5961f40a929ac34bb7",
+    "kladb_sites": "4a54ea937411ee21f7a7bdf3dcd2448205a97e5276a856242085b55f1c66ed26",
+    "rice_proteome": "562f03b3650d3a9b6e39b5770bd107a394c49537ee3bc7e9a13a145c9f3f05fc",
+    "rice_table": "eac6073f4853ca17762dc07806e477b80b754f6292a78f8968dd43540c897dc9",
+    "verified_positives": "4e89a9ee5dda1e15ed512f86c254d438fbb4790c2b03a5310527967441e01ff9"
+  },
+  "known_positive_windows_screened": 38128,
+  "limitations": [
+    "Negative labels mean unreported lysines, not experimentally verified absence of lactylation.",
+    "No negative sampling, external test lock, or full-protein homology screen is performed by this command."
+  ],
+  "screened_peptide_supported_sites": 609
+}

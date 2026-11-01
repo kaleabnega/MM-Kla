@@ -235,11 +235,15 @@ The [KlaDB species list](https://kladb.wuxl-group.com/) does not include
 uses Gao's deposited PXD020746 dataset, so it is not an independent study.
 The [Meng et al. rice lactylome](https://doi.org/10.1021/acs.jafc.1c00760)
 is a candidate cross-species external study. A [dated source audit](review_data/source_study_audit_2026_11_01/README.md)
-has now verified 529 rice positive-site windows against the primary table,
+has verified 529 rice positive-site windows against the primary table,
 UniProt sequences, and KlaDB. There is no exact 51-aa window overlap with
-Gao candidates, but protein-homology screening and a defensible putative-
-negative policy are still required before this can be an external binary
-test. Wheat and soybean remain unverified candidate studies.
+Gao candidates. A bidirectional MMseqs2 screen at 30% identity and 40%
+bidirectional full-protein coverage excludes 56 homologous rice proteins,
+leaving 409 reported positives and 4,384 putative negatives on 235 proteins.
+These are screened candidates, not a locked external test: the controls are
+unobserved rather than experimentally verified negatives, repeated windows
+need a fixed handling rule, and neither model has yet been rerun on this
+dataset. Wheat and soybean remain unverified candidate studies.
 
 ## Candidate-Protein Group Diagnostic
 

@@ -1,0 +1,45 @@
+{
+  "candidate_proteins": {
+    "gao": 162,
+    "rice": 291
+  },
+  "input_sha256": {
+    "forward_40": "3a753ce23b2118eef3aeafee3168e05663c953976bd25e200f5ac84bd40eb84e",
+    "forward_80": "5f18ea3234cf2138d753b8ac1deb0267fd10f8539a3623bce75628f167c9a327",
+    "gao_candidates": "0e0d6dce9e0c25a29faf204c64e22dc16125335313426c5961f40a929ac34bb7",
+    "gao_fasta": "a5a975a9212e02d4355604e162664fc030972197d2c2778609d7f5da56c4f031",
+    "reverse_40": "a2649d1b46c50e0c50306cb4682a0f37d885b11191d54338d3e8c5fc81ebd046",
+    "reverse_80": "0aec74f3e33e0c9dc9cabd836ab10185a896c3dfcb1e59f99421f225ce6ed17d",
+    "rice_candidates": "bd5c86f02cf19caffbed2c19abe4ea7fb216c2a7daa96dc8a8e43c82e634bff8",
+    "rice_fasta": "35cb9ff15347ad08741a0830d1053e45d4e0c93a794207c9c663da531672e2bd"
+  },
+  "limitations": [
+    "The protein search threshold cannot rule out more remote or shorter local/domain homology.",
+    "Remaining rice negative labels are putative; this is not a locked external test or a performance result.",
+    "The screen is against the Gao source-derived development proteins only, not arbitrary future training data."
+  ],
+  "output_sha256": {
+    "filtered_candidates": "e1f60f7aaed2457ba78e59b7152f18e1dd283cb206c4f020af9a39e1b40ffcda",
+    "homology_hits": "80017d219955c8c62af33423cc188f953c34e61191e9075b20b49bb0af62d6b9"
+  },
+  "rice_proteins_after": 235,
+  "rule": "MMseqs2 18-8cc5c+ds-2, identity >=30%, alignment coverage >=40% of both full proteins; union of both search directions",
+  "screen_40_percent_coverage": {
+    "cross_pairs": 70,
+    "gao_proteins": 36,
+    "rice_proteins_excluded": 56
+  },
+  "screen_80_percent_coverage": {
+    "cross_pairs": 57,
+    "gao_proteins": 32,
+    "rice_proteins": 45
+  },
+  "site_counts_after": {
+    "0": 4384,
+    "1": 409
+  },
+  "site_counts_before": {
+    "0": 5607,
+    "1": 529
+  }
+}
