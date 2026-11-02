@@ -153,3 +153,9 @@ Kaggle environment from the pinned public sources. `--human-lock` accepts the
 mounted path to `split_audit.json`; its adjacent `model_manifest.csv` is
 verified by checksum at load time. No GitHub access token is needed when only
 the public source files and a private Kaggle dataset are used.
+
+The [Kaggle human notebook](../../kaggle_human_study.ipynb) additionally clones
+this private code repository through a Kaggle Secret named `GITHUB_TOKEN`. It
+expects exactly the v1 locked pair listed above, runs the two architectures on
+separate GPUs when available, and leaves test evaluation disabled until the
+training settings are fixed. Notebook output is written to `/kaggle/working`.

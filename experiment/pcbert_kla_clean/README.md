@@ -28,6 +28,11 @@ deviation, and prediction files. It neither evaluates Gao internal test nor
 rice. The feature-only control has less input information than the two
 ProtBert-based models; it is not a matched PLM-plus-features baseline.
 
+The [Kaggle human benchmark notebook](kaggle_human_study.ipynb) uses the locked
+KlaDB human manifests. It runs matched baseline and token-gated models on two
+visible GPUs as separate processes, with pilot and timing modes that do not
+evaluate the test partitions. Final test evaluation is disabled by default.
+
 The original train/test benchmark has exact sequence overlap. Previous metrics
 remain available for historical comparison, but they do not establish
 performance on unseen proteins. The current revision protocol and audit are
