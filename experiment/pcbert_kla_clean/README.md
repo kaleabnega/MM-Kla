@@ -19,6 +19,15 @@ training indices, while checkpoint selection uses unweighted validation AUPRC.
 The original model outputs are probabilities, so this implementation weights
 the existing probability-based BCE rather than applying a logits loss to them.
 
+The [Kaggle matched-seed development notebook](kaggle_multiseed_development.ipynb)
+runs unweighted PCBert-Kla and token-gated models on the locked Gao development
+partition with five matched seeds. It also evaluates a deterministic logistic
+regression control on the same 27 physicochemical features. The notebook saves
+per-seed validation results, paired differences, mean and sample standard
+deviation, and prediction files. It neither evaluates Gao internal test nor
+rice. The feature-only control has less input information than the two
+ProtBert-based models; it is not a matched PLM-plus-features baseline.
+
 The original train/test benchmark has exact sequence overlap. Previous metrics
 remain available for historical comparison, but they do not establish
 performance on unseen proteins. The current revision protocol and audit are
@@ -47,6 +56,7 @@ experiment/pcbert_kla_clean/
     ├── metrics.py
     ├── model.py
     ├── review_dataset.py
+    ├── simple_baselines.py
     ├── training.py
     └── utils.py
 ```
