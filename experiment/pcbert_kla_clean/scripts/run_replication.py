@@ -38,6 +38,9 @@ def parse_args() -> argparse.Namespace:
             "source-study-check",
             "source-study-development",
             "source-study",
+            "human-study-check",
+            "human-study-development",
+            "human-study",
         ],
         default="data-check",
     )
@@ -46,6 +49,10 @@ def parse_args() -> argparse.Namespace:
         "--source-lock",
         type=Path,
         default=PROJECT_DIR / "review_data/locked_source_study_v1/protocol_lock.json",
+    )
+    parser.add_argument(
+        "--human-lock", type=Path,
+        default=PROJECT_DIR / "outputs/kladb_human_locked/split_audit.json",
     )
     parser.add_argument(
         "--sequence-format",
@@ -189,7 +196,60 @@ def run_data_check(train_split, test_split) -> None:
 def main() -> None:
     args = parse_args()
     if args.monitor_metric is None:
-        args.monitor_metric = "AUPRC" if args.run in {"window-diagnostic", "candidate-group-diagnostic", "source-study", "source-study-development"} else "ACC"
+        args.monitor_metric = "AUPRC" if args.run in {"window-diagnostic", "candidate-group-diagnostic", "source-study", "source-study-development", "human-study", "human-study-development"} else "ACC"
+
+    if args.run in {"human-study-check", "human-study-development", "human-study"}:
+        from pcbert_kla_clean.human_study import load_human_study
+        from pcbert_kla_clean.source_study import sha256
+
+        development, validation_indices, internal_test, external_test = load_human_study(
+            args.human_lock
+        )
+        report = {
+            "training_rows": len(development.records) - len(validation_indices),
+            "validation_rows": len(validation_indices),
+            "internal_test_rows": len(internal_test.records),
+            "external_test_rows": len(external_test.records),
+            "human_lock_sha256": sha256(args.human_lock),
+        }
+        print(json.dumps(report, indent=2, sort_keys=True))
+        if args.run == "human-study-check":
+            return
+        if args.ablation != "none" or args.calibrate_threshold != "none":
+            raise ValueError("Human primary comparison requires no ablation or threshold calibration")
+        if args.monitor_metric != "AUPRC" or args.decision_threshold != 0.5:
+            raise ValueError("Human primary comparison requires validation AUPRC and threshold 0.5")
+        from pcbert_kla_clean.backbones import infer_site_token_index, load_tokenizer
+        from pcbert_kla_clean.experiments import train_and_predict_independent
+        import torch
+
+        if args.site_token_index is None:
+            args.site_token_index = infer_site_token_index(args.model_name)
+        args.device = resolve_device(args.device)
+        args.human_lock_sha256 = report["human_lock_sha256"]
+        config = {
+            key: str(value) if isinstance(value, Path) else value
+            for key, value in vars(args).items() if key != "output_dir"
+        }
+        run_id = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:12]
+        output_dir = args.output_dir / "human_study" / "runs" / run_id
+        development_only = args.run == "human-study-development"
+        result = train_and_predict_independent(
+            args, development, None if development_only else internal_test, seed=args.seed,
+            tokenizer=load_tokenizer(args.model_name, args.cache_dir),
+            device=torch.device(args.device), output_dir=output_dir,
+            fixed_validation_indices=validation_indices,
+            extra_test_splits=None if development_only else {"external_study": external_test},
+        )
+        if development_only:
+            print("\nHuman validation (development only):")
+            print(json.dumps({"loss": result["validation_loss"], **result["validation_metrics"]}, indent=2))
+        else:
+            print("\nHuman internal test:")
+            print(json.dumps({"loss": result["loss"], **result["metrics"]}, indent=2))
+            print("\nHuman study-held-out test:")
+            print(json.dumps(result["extra_metrics"]["external_study"], indent=2))
+        return
 
     if args.run in {"source-study-check", "source-study-development", "source-study"}:
         from pcbert_kla_clean.source_study import load_locked_partitions, sha256

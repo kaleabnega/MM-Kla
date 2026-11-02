@@ -36,6 +36,11 @@ The 27 descriptors and their verified computation are documented in
 [FEATURES.md](FEATURES.md).
 The source-derived, locked Gao/rice evaluation is documented in
 [locked_source_study_v1](review_data/locked_source_study_v1/README.md).
+The current human study-held-out revision, based on accession-labelled KlaDB
+sites and a UniProt reference proteome, is documented in
+[kladb_human_v1](review_data/kladb_human_v1/README.md). The same locked manifest
+is used for both PCBert-Kla and token-gated comparisons. Source downloads and
+generated manifests are local artifacts and are not committed.
 
 ## Directory Structure
 
@@ -79,6 +84,8 @@ experiment/pcbert_kla_clean/
 - Component ablations for the token-gated architecture.
 - Accession-labelled Gao train/validation/internal-test and rice
   study-held-out external evaluation, with source-file hash checks.
+- KlaDB human site preparation, full-protein homology and exact-window split
+  locking, and matched baseline/token-gated study-held-out evaluation.
 
 ## Data
 
