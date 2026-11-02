@@ -158,4 +158,7 @@ The [Kaggle human notebook](../../kaggle_human_study.ipynb) additionally clones
 this private code repository through a Kaggle Secret named `GITHUB_TOKEN`. It
 expects exactly the v1 locked pair listed above, runs the two architectures on
 separate GPUs when available, and leaves test evaluation disabled until the
-training settings are fixed. Notebook output is written to `/kaggle/working`.
+training settings are fixed. Each final saved version evaluates one predeclared
+seed and writes a verified result bundle. Earlier notebook outputs can be
+attached as Kaggle inputs for the cross-seed summary. Notebook output is
+written to `/kaggle/working`.

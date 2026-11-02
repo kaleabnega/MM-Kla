@@ -32,6 +32,16 @@ The [Kaggle human benchmark notebook](kaggle_human_study.ipynb) uses the locked
 KlaDB human manifests. It runs matched baseline and token-gated models on two
 visible GPUs as separate processes, with pilot and timing modes that do not
 evaluate the test partitions. Final test evaluation is disabled by default.
+Each final Kaggle version runs one predeclared seed (`42`, `123`, or `777`) with
+both architectures. Set `RUN_CAPPED_PILOT = False`,
+`RUN_FULL_EPOCH_TIMING = False`, `RUN_FINAL_EVALUATION = True`, and select
+`FINAL_SEED`; keep all other settings unchanged. Save a separate **Save & Run
+All** version for each seed, retaining its complete notebook output. Attach
+the prior versions' outputs as Kaggle inputs for subsequent runs. The notebook
+verifies the per-seed artifacts and combines the results only when all three
+seeds are available. Duplicate seeds and mismatched code commits or settings
+are rejected. The notebook output includes `final_seed_<seed>.json`, raw
+predictions, model checkpoints, logs, and the combined summary after seed 777.
 
 The original train/test benchmark has exact sequence overlap. Previous metrics
 remain available for historical comparison, but they do not establish
