@@ -27,6 +27,38 @@ CKSAAP, GPS, OBC, and PSEAAC, followed by a learned meta-model. Replacing
 this with only ESM2 and a small classifier would be a different baseline,
 not a reproduction of HybridKla.
 
+### Training Workbook Overlap
+
+The upstream `train/train_data.xlsx` (SHA-256
+`c5196c40a3ee0c3044f332a25b47f175cc69b88eaa909a5c3b82cd1fc50d5b29`)
+has 47,004 unique 51-residue windows, balanced between positive and negative
+labels. All `UniProt_ID` entries are generic `trainN` identifiers, so they
+cannot support a protein-level overlap check. Exact-window comparison with
+our locked export found:
+
+| Locked partition | Rows | Exact matches | Matches with opposite labels |
+| --- | ---: | ---: | ---: |
+| Training | 39,880 | 9,519 | 644 |
+| Validation | 17,713 | 2,134 | 223 |
+| Internal test | 35,455 | 4,656 | 555 |
+| Study-held-out test | 5,095 | 66 | 2 |
+
+The opposing labels reflect a difference between the two dataset definitions;
+they do not establish which label is biologically correct. The upstream ESM2
+training script reads this workbook directly. Thus, a Kla-trained model built
+from those records cannot be presented as independent on either locked test.
+This audit covers only exact windows, not homologous proteins or all possible
+upstream training sources. It is reproducible without redistributing upstream
+data:
+
+```bash
+cd experiment/pcbert_kla_clean
+python3 scripts/audit_hybridkla_overlap.py \
+  --workbook /path/to/HybridKla/train/train_data.xlsx \
+  --split-dir outputs/hybridkla_locked \
+  --output outputs/hybridkla_locked/upstream_overlap_audit.json
+```
+
 ## Locked Input Export
 
 `scripts/export_hybridkla_splits.py` verifies the adjacent locked manifest
@@ -62,7 +94,7 @@ normalization. Validation alone selects checkpoints and any method-specific
 hyperparameters. Only then may the two tests be scored at the predeclared
 threshold, using the same reporting metrics and seeds as the other models.
 
-The released Kla-trained HybridKla weights must not initialize any
-task-specific component without an overlap audit. Generic protein-language
+Kla-trained HybridKla weights or predictions derived from the upstream
+training workbook must not be used on the locked tests. Generic protein-language
 model pretraining is a separate matter and can be used if documented. No
 HybridKla score on this locked benchmark has been produced yet.
