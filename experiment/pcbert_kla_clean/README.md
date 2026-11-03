@@ -63,9 +63,17 @@ export and overlap audit without training either existing architecture: set
 `RUN_CAPPED_PILOT = False`, `RUN_FULL_EPOCH_TIMING = False`,
 `RUN_FINAL_EVALUATION = False`, and `RUN_HYBRIDKLA_PREPARATION = True`. It uses
 a separate `hybridkla-benchmark` checkout and records its commit. This section
-does not train HybridKla or produce a HybridKla score. The benchmark branch is
-kept separate from `main` while the predeclared PCBert-Kla/MM-Kla seeds are
-being completed.
+does not train HybridKla or produce a HybridKla score. Section 10 runs an
+exploratory eight-branch **HybridKla-adapted** model. First set
+`RUN_HYBRIDKLA_PILOT = True` for a one-epoch training-only smoke test that
+does not score tests. In a separate Kaggle version, set it to `False` and set
+`RUN_HYBRIDKLA_ADAPTED = True` for the full seed-42 run. Keep
+`RUN_HYBRIDKLA_PREPARATION = True` for both. It uses frozen ESM2
+representations and a homology-group-disjoint training holdout for stacking, not the
+authors' fine-tuned ESM2 and five-fold stacking. Its outputs must not be
+reported as an exact HybridKla reproduction. The benchmark branch is kept
+separate from `main` while the predeclared PCBert-Kla/MM-Kla seeds remain
+unfinished.
 
 ## Directory Structure
 

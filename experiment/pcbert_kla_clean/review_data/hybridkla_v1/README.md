@@ -29,7 +29,7 @@ not a reproduction of HybridKla.
 
 ### Training Workbook Overlap
 
-The upstream `train/train_data.xlsx` (SHA-256
+The GitHub `train/train_data.xlsx` (SHA-256
 `c5196c40a3ee0c3044f332a25b47f175cc69b88eaa909a5c3b82cd1fc50d5b29`)
 has 47,004 unique 51-residue windows, balanced between positive and negative
 labels. All `UniProt_ID` entries are generic `trainN` identifiers, so they
@@ -43,6 +43,24 @@ our locked export found:
 | Internal test | 35,455 | 4,656 | 555 |
 | Study-held-out test | 5,095 | 66 | 2 |
 
+The authors' [official code archive](https://transkla.zzu.edu.cn/download/)
+(`HybridKla.zip`, SHA-256
+`73ddb128c441d7b213c4636e6bb6ce34501e82143c2b9bc06ec329d68a422993`)
+contains the same 47,004 windows and labels but uses accession-position strings
+instead of generic `trainN` IDs. It also contains `BLOSUM62R.txt` (SHA-256
+`7f6f4a1ba4c9df90b402898e9ed7baaf9e515037b4236f063d9fcf991e044526`),
+which is absent from GitHub. The official workbook's SHA-256 is
+`e813ed5e495b63539a409bf66d70f5279d1308dfda65a1da181c39eabb4aa449`.
+Its IDs are accession-like strings and have not been independently validated
+against UniProt. Comparing those strings with the locked export finds:
+
+| Locked partition | Exact site IDs | Rows sharing an accession | Distinct shared accessions |
+| --- | ---: | ---: | ---: |
+| Training | 9,171 | 30,500 | 2,009 |
+| Validation | 2,062 | 12,406 | 281 |
+| Internal test | 4,438 | 25,233 | 556 |
+| Study-held-out test | 64 | 665 | 3 |
+
 The opposing labels reflect a difference between the two dataset definitions;
 they do not establish which label is biologically correct. The upstream ESM2
 training script reads this workbook directly. Thus, a Kla-trained model built
@@ -54,7 +72,7 @@ data:
 ```bash
 cd experiment/pcbert_kla_clean
 python3 scripts/audit_hybridkla_overlap.py \
-  --workbook /path/to/HybridKla/train/train_data.xlsx \
+  --workbook /path/to/official/HybridKla/train/train_data.xlsx \
   --split-dir outputs/hybridkla_locked \
   --output outputs/hybridkla_locked/upstream_overlap_audit.json
 ```
@@ -98,3 +116,25 @@ Kla-trained HybridKla weights or predictions derived from the upstream
 training workbook must not be used on the locked tests. Generic protein-language
 model pretraining is a separate matter and can be used if documented. No
 HybridKla score on this locked benchmark has been produced yet.
+
+`scripts/run_hybridkla_adapted.py` implements a compute-bounded exploratory
+eight-branch comparison using the six feature encoders, a six-layer LSTM,
+frozen ESM2 embeddings with a trained head, and a learned meta-model. The
+GPS reference is fitted only on the base-training subset. Base predictors use
+a homology-group-disjoint 80% training subset; the remaining training groups fit
+the meta-model. Checkpoints are selected by validation AUPRC, then the two
+locked tests are scored at threshold 0.5. The official `top10.txt` and
+`BLOSUM62R.txt` are loaded at runtime and verified by SHA-256. This is an
+**adaptation**, not an exact reproduction of the authors' five-fold, fine-tuned
+ESM2 training protocol; any resulting score must be labeled accordingly.
+The Kaggle notebook's section 10 invokes this runner only when explicitly
+enabled. No score is claimed until that run completes.
+
+On two synthetic 51-residue windows, the ACF, AAINDEX, CKSAAP, GPS, and
+PSEAAC encoders were compared with the authors' official archive functions;
+their maximum absolute differences were below `2e-6`. The archive's OBC
+function calls `tf.keras` without importing `tf`, so it could not be executed
+unchanged in that check. The adaptation uses a direct 22-category one-hot
+encoding with the published 1,122-value dimension. GPS equivalence was checked
+with the same reference windows; in the benchmark runner, its reference is
+restricted to base-training windows to prevent test contamination.

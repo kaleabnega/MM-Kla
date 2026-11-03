@@ -23,7 +23,7 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def load_training_workbook(path: Path) -> tuple[dict[str, set[str]], dict]:
+def load_training_workbook(path: Path) -> tuple[dict[str, set[str]], dict, set[str], set[str]]:
     with ZipFile(path) as workbook:
         shared = []
         if "xl/sharedStrings.xml" in workbook.namelist():
@@ -57,6 +57,8 @@ def load_training_workbook(path: Path) -> tuple[dict[str, set[str]], dict]:
 
     sequences = defaultdict(set)
     generic_ids = 0
+    site_ids = set()
+    accessions = set()
     for row in rows[1:]:
         values = row_values(row)
         sequence = values.get(header["Sequence"], "")
@@ -66,16 +68,22 @@ def load_training_workbook(path: Path) -> tuple[dict[str, set[str]], dict]:
             raise ValueError(f"Invalid sequence or label at workbook row {row.attrib.get('r')}")
         sequences[sequence].add(label)
         generic_ids += bool(re.fullmatch(r"train\d+", source_id))
+        site_match = re.fullmatch(r"([^_]+)_([1-9]\d*)", source_id)
+        if site_match:
+            site_ids.add(source_id)
+            accessions.add(site_match.group(1))
     return dict(sequences), {
         "rows": len(rows) - 1,
         "unique_windows": len(sequences),
         "conflicting_window_labels": sum(len(labels) > 1 for labels in sequences.values()),
         "generic_train_ids": generic_ids,
-    }
+        "accession_position_ids": len(site_ids),
+        "accession_like_prefixes": len(accessions),
+    }, site_ids, accessions
 
 
 def audit(workbook: Path, split_dir: Path) -> dict:
-    source, source_summary = load_training_workbook(workbook)
+    source, source_summary, source_sites, source_accessions = load_training_workbook(workbook)
     partitions = {}
     hashes = {"hybridkla_train_data.xlsx": sha256(workbook)}
     for partition in PARTITIONS:
@@ -83,13 +91,18 @@ def audit(workbook: Path, split_dir: Path) -> dict:
         hashes[path.name] = sha256(path)
         with path.open(newline="") as handle:
             reader = csv.DictReader(handle)
-            if reader.fieldnames is None or not {"Sequence", "Label"}.issubset(reader.fieldnames):
-                raise ValueError(f"Missing Sequence or Label in {path}")
+            required = {"Site_ID", "ACC_ID", "Sequence", "Label"}
+            if reader.fieldnames is None or not required.issubset(reader.fieldnames):
+                raise ValueError(f"Missing required columns in {path}")
             rows = list(reader)
         matched = [row for row in rows if row["Sequence"] in source]
+        matching_accessions = {row["ACC_ID"] for row in rows if row["ACC_ID"] in source_accessions}
         partitions[partition] = {
             "rows": len(rows),
             "exact_window_overlap": len(matched),
+            "exact_site_id_overlap": sum(row["Site_ID"] in source_sites for row in rows),
+            "rows_on_matching_accessions": sum(row["ACC_ID"] in source_accessions for row in rows),
+            "distinct_matching_accessions": len(matching_accessions),
             "overlap_positive_in_locked_split": sum(row["Label"] == "1" for row in matched),
             "matched_same_label": sum(row["Label"] in source[row["Sequence"]] for row in matched),
             "matched_opposite_label": sum(row["Label"] not in source[row["Sequence"]] for row in matched),
@@ -98,7 +111,7 @@ def audit(workbook: Path, split_dir: Path) -> dict:
         "source": source_summary,
         "partitions": partitions,
         "sha256": hashes,
-        "scope": "Exact 51-residue window matches only; no protein-homology or full training-provenance audit.",
+        "scope": "Exact 51-residue windows and accession-position strings only; accession identities and homology are not independently verified.",
     }
 
 

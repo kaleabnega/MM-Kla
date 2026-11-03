@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 PARTITIONS = ("train", "validation", "internal_test", "external_test")
-OUTPUT_COLUMNS = ("Site_ID", "UniProt_ID", "ACC_ID", "Mod_positions", "Sequence", "Label")
+OUTPUT_COLUMNS = ("Site_ID", "UniProt_ID", "ACC_ID", "Homology_group", "Mod_positions", "Sequence", "Label")
 
 
 def sha256(path: Path) -> str:
@@ -70,6 +70,7 @@ def export_splits(lock: Path, output_dir: Path) -> dict:
                 "Site_ID": site_id,
                 "UniProt_ID": accession,
                 "ACC_ID": accession,
+                "Homology_group": group,
                 "Mod_positions": position,
                 "Sequence": window,
                 "Label": int(label),

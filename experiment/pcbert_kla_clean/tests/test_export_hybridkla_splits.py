@@ -55,6 +55,7 @@ class HybridKlaExportTests(unittest.TestCase):
             self.assertEqual(train_row["Site_ID"], "P0_26")
             self.assertEqual(train_row["UniProt_ID"], "P0")
             self.assertEqual(train_row["ACC_ID"], "P0")
+            self.assertEqual(train_row["Homology_group"], "G0")
             self.assertEqual(train_row["Sequence"][25], "K")
 
     def test_cross_partition_window_is_rejected(self):

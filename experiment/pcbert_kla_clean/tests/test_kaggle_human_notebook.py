@@ -33,6 +33,8 @@ class KaggleHumanNotebookTests(unittest.TestCase):
             code.append(source)
         self.assertIn("RUN_FINAL_EVALUATION = False", code[0])
         self.assertIn("RUN_HYBRIDKLA_PREPARATION = False", code[0])
+        self.assertIn("RUN_HYBRIDKLA_PILOT = False", code[0])
+        self.assertIn("RUN_HYBRIDKLA_ADAPTED = False", code[0])
         self.assertIn("FINAL_SEEDS = (42, 123, 777)", code[0])
         self.assertIn("FINAL_SEED = 42", code[0])
         self.assertIn("human-study-development", "\n".join(code))
@@ -44,6 +46,9 @@ class KaggleHumanNotebookTests(unittest.TestCase):
         self.assertIn("export_hybridkla_splits.py", "".join(preparation["source"]))
         self.assertIn("audit_hybridkla_overlap.py", "".join(preparation["source"]))
         self.assertNotIn("run_replication.py", "".join(preparation["source"]))
+        adapted = next(cell for cell in cells if cell["id"] == "hybridkla-adapted-run")
+        self.assertIn("run_hybridkla_adapted.py", "".join(adapted["source"]))
+        self.assertIn("--human-lock", "".join(adapted["source"]))
 
     def test_separate_seed_outputs_aggregate_only_when_complete(self):
         import pandas as pd
