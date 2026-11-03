@@ -189,27 +189,51 @@ def grouped_folds(rows: list[dict[str, str]], folds: int, seed: int) -> list[lis
 def read_lock(lock_path: Path) -> tuple[dict[str, list[dict[str, str]]], dict]:
     audit = json.loads(lock_path.read_text())
     manifest = lock_path.with_name("model_manifest.csv")
-    if sha256(manifest) != audit["model_manifest_sha256"]:
+    study_lock = "output_sha256" in audit
+    expected_sha = (audit["output_sha256"]["model_manifest.csv"] if study_lock
+                    else audit["model_manifest_sha256"])
+    if sha256(manifest) != expected_sha:
         raise ValueError("HybridKla source manifest does not match lock")
     with manifest.open(newline="") as handle:
         rows = list(csv.DictReader(handle))
-    partitions = {name: [] for name in ("train", "validation", "internal_test")}
-    accessions = {}
+    partitions = {name: [] for name in ("train", "validation", "internal_test", "external_test")}
+    accessions, groups = {}, {}
     windows = set()
     for row in rows:
         partition = row["partition"]
-        if partition not in partitions or row["group_id"] != row["accession"]:
-            raise ValueError("Invalid source partition or accession group")
-        if accessions.setdefault(row["accession"], partition) != partition:
-            raise ValueError("Accession crosses source partitions")
+        if partition not in partitions:
+            raise ValueError("Invalid source partition")
+        if study_lock:
+            expected = ("S7", "Mus musculus") if partition == "external_test" else (
+                "S1", "Homo sapiens")
+            if (row["source_table"], row["species"]) != expected:
+                raise ValueError("HybridKla study source does not match partition")
+            row["group_id"] = row["homology_group"]
+            row["source_site_id"] = f'{row["protein_id"]}:{row["position_1based"]}'
+            identifier = row["protein_id"]
+        else:
+            if row["group_id"] != row["accession"]:
+                raise ValueError("Invalid source accession group")
+            identifier = row["accession"]
+        if accessions.setdefault(identifier, partition) != partition:
+            raise ValueError("Protein crosses source partitions")
+        if groups.setdefault(row["group_id"], partition) != partition:
+            raise ValueError("Homology group crosses source partitions")
         if row["window_51aa"] in windows:
             raise ValueError("Exact window repeated in source lock")
         windows.add(row["window_51aa"])
         partitions[partition].append(row)
     for name, group_rows in partitions.items():
-        expected = audit["partitions"][name]
-        if len(group_rows) != expected["rows"] or sum(r["label"] == "1" for r in group_rows) != expected["positives"]:
+        if name == "external_test" and not study_lock:
+            continue
+        expected = (audit["partitions_before_training_resampling"][name] if study_lock
+                    else audit["partitions"][name])
+        if ((name != "train" or not study_lock) and
+            (len(group_rows) != expected["rows"] or
+             sum(r["label"] == "1" for r in group_rows) != expected["positives"])):
             raise ValueError(f"Source lock count mismatch in {name}")
+        if not group_rows:
+            raise ValueError(f"Empty partition: {name}")
     return partitions, audit
 
 
@@ -338,44 +362,48 @@ def run(args: argparse.Namespace) -> dict:
                    checkpoint_dir / "META.pth")
         fold_reports["META"] = {"selected_epoch": meta_result.selected_epoch,
                                 "validation_auprc": meta_result.validation_auprc}
-        test_rows = partitions["internal_test"]
-        test_branch_scores = np.empty((len(test_rows), len(BRANCHES)), dtype=np.float32)
-        for column, name in enumerate(BRANCHES):
-            accumulated = np.zeros(len(test_rows), dtype=np.float64)
-            for fold, holdout_indices in enumerate(folds):
-                checkpoint = checkpoint_dir / f"{name}_fold_{fold}.pth"
-                if name == "ESM2":
-                    model = TrainableEsmBranch(args.esm_model, revision).to(device)
-                    model.load_state_dict(torch.load(checkpoint, map_location=device, weights_only=True))
-                    scores = esm_scores(model, tokenize_sequences(
-                        [row["window_51aa"] for row in test_rows], tokenizer),
-                        device, args.esm_batch_size)
-                    del model
-                    if device.type == "cuda":
-                        torch.cuda.empty_cache()
-                else:
-                    gps_reference = fit_gps_reference([
-                        train_rows[index]["window_51aa"]
-                        for index in sorted(all_indices - set(holdout_indices))])
-                    test_values = branch_arrays(name, test_rows, resources, gps_reference)
-                    model = (SequenceLSTM() if name == "LSTM" else FeatureDNN(name)).to(device)
-                    model.load_state_dict(torch.load(checkpoint, map_location=device, weights_only=True))
-                    scores = predict_scores(model, test_values, device,
-                                            batch_size=128 if name == "LSTM" else 1024)
-                    del model
-                accumulated += scores / len(folds)
-            test_branch_scores[:, column] = accumulated.astype(np.float32)
-        final_scores = predict_scores(meta_result.model, test_branch_scores, device)
-        score_rows = [{"Site_ID": row["source_site_id"], "Label": row["label"]}
-                      for row in test_rows]
-        test_metrics = {"internal_test": evaluate_and_save(
-            "internal_test", score_rows, final_scores, output)}
-        print("HybridKla architecture internal test:", json.dumps(test_metrics["internal_test"]), flush=True)
+        test_metrics = {}
+        for test_name in ("internal_test", "external_test"):
+            test_rows = partitions[test_name]
+            if not test_rows:
+                continue
+            test_branch_scores = np.empty((len(test_rows), len(BRANCHES)), dtype=np.float32)
+            for column, name in enumerate(BRANCHES):
+                accumulated = np.zeros(len(test_rows), dtype=np.float64)
+                for fold, holdout_indices in enumerate(folds):
+                    checkpoint = checkpoint_dir / f"{name}_fold_{fold}.pth"
+                    if name == "ESM2":
+                        model = TrainableEsmBranch(args.esm_model, revision).to(device)
+                        model.load_state_dict(torch.load(checkpoint, map_location=device, weights_only=True))
+                        scores = esm_scores(model, tokenize_sequences(
+                            [row["window_51aa"] for row in test_rows], tokenizer),
+                            device, args.esm_batch_size)
+                        del model
+                        if device.type == "cuda":
+                            torch.cuda.empty_cache()
+                    else:
+                        gps_reference = fit_gps_reference([
+                            train_rows[index]["window_51aa"]
+                            for index in sorted(all_indices - set(holdout_indices))])
+                        test_values = branch_arrays(name, test_rows, resources, gps_reference)
+                        model = (SequenceLSTM() if name == "LSTM" else FeatureDNN(name)).to(device)
+                        model.load_state_dict(torch.load(checkpoint, map_location=device, weights_only=True))
+                        scores = predict_scores(model, test_values, device,
+                                                batch_size=128 if name == "LSTM" else 1024)
+                        del model
+                    accumulated += scores / len(folds)
+                test_branch_scores[:, column] = accumulated.astype(np.float32)
+            final_scores = predict_scores(meta_result.model, test_branch_scores, device)
+            score_rows = [{"Site_ID": row["source_site_id"], "Label": row["label"]}
+                          for row in test_rows]
+            test_metrics[test_name] = evaluate_and_save(test_name, score_rows, final_scores, output)
+            print(f"HybridKla architecture {test_name}:", json.dumps(test_metrics[test_name]), flush=True)
     report = {
         "method": "HybridKla architecture-aligned retraining; grouped protocol, not exact authors' CV",
-        "mode": "one-fold-training-only-timing" if args.pilot else "locked-internal-test",
-        "benchmark_status": audit["benchmark_status"],
-        "benchmark_manifest_sha256": audit["model_manifest_sha256"],
+        "mode": "one-fold-training-only-timing" if args.pilot else "locked-test-evaluation",
+        "benchmark_status": audit.get("benchmark_status", audit.get("protocol")),
+        "benchmark_manifest_sha256": (audit["output_sha256"]["model_manifest.csv"]
+                                      if "output_sha256" in audit else audit["model_manifest_sha256"]),
         "benchmark_lock_sha256": sha256(args.benchmark_lock),
         "model_name": args.esm_model, "model_revision": revision,
         "seed": args.seed, "folds": 5, "threshold": 0.5,

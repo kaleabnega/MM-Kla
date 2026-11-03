@@ -58,6 +58,17 @@ test, so these internal scores cannot establish generalization to a new study.
 The [source audit](review_data/hybridkla_v1/README.md) records exact counts,
 hashes, and further limitations.
 
+The [human-to-mouse HybridKla-derived notebook](kaggle_hybridkla_study.ipynb)
+builds a separate reference-verified and homology-screened benchmark from
+supplementary Tables S1 and S7. Its locked manifest supports matched
+PCBert-Kla/MM-Kla runs and architecture-aligned HybridKla retraining, with the
+mouse test withheld from selection. After screening, the mouse test has only
+64 reported positive sites; S1/S7 lack per-site study identifiers. The
+[benchmark audit](review_data/hybridkla_study_v1/README.md) gives counts,
+eligibility rules, and interpretation limits. This does not replace the
+provisional workbook analysis above or establish exact reproduction of the
+authors' published scores.
+
 The original train/test benchmark has exact sequence overlap. Previous metrics
 remain available for historical comparison, but they do not establish
 performance on unseen proteins. The current revision protocol and audit are
