@@ -56,6 +56,9 @@ sites and a UniProt reference proteome, is documented in
 [kladb_human_v1](review_data/kladb_human_v1/README.md). The same locked manifest
 is used for both PCBert-Kla and token-gated comparisons. Source downloads and
 generated manifests are local artifacts and are not committed.
+The [HybridKla reproduction audit](review_data/hybridkla_v1/README.md) records
+the upstream training dependencies and a split-preserving export. It is not
+yet a trained HybridKla comparison.
 
 ## Directory Structure
 
