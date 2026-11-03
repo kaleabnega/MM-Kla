@@ -57,8 +57,15 @@ sites and a UniProt reference proteome, is documented in
 is used for both PCBert-Kla and token-gated comparisons. Source downloads and
 generated manifests are local artifacts and are not committed.
 The [HybridKla reproduction audit](review_data/hybridkla_v1/README.md) records
-the upstream training dependencies and a split-preserving export. It is not
-yet a trained HybridKla comparison.
+the upstream training dependencies, exact overlap with the locked tests, and
+a split-preserving export. Section 9 of the Kaggle human notebook can run the
+export and overlap audit without training either existing architecture: set
+`RUN_CAPPED_PILOT = False`, `RUN_FULL_EPOCH_TIMING = False`,
+`RUN_FINAL_EVALUATION = False`, and `RUN_HYBRIDKLA_PREPARATION = True`. It uses
+a separate `hybridkla-benchmark` checkout and records its commit. This section
+does not train HybridKla or produce a HybridKla score. The benchmark branch is
+kept separate from `main` while the predeclared PCBert-Kla/MM-Kla seeds are
+being completed.
 
 ## Directory Structure
 

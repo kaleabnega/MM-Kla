@@ -32,12 +32,18 @@ class KaggleHumanNotebookTests(unittest.TestCase):
             self.assertEqual(cells[index - 1]["cell_type"], "markdown")
             code.append(source)
         self.assertIn("RUN_FINAL_EVALUATION = False", code[0])
+        self.assertIn("RUN_HYBRIDKLA_PREPARATION = False", code[0])
         self.assertIn("FINAL_SEEDS = (42, 123, 777)", code[0])
         self.assertIn("FINAL_SEED = 42", code[0])
         self.assertIn("human-study-development", "\n".join(code))
         self.assertIn("human-study'", "\n".join(code))
         self.assertIn("EXPECTED_MANIFEST_SHA256", "\n".join(code))
-        self.assertIn("human_paired_differences.csv", code[-1])
+        results = next(cell for cell in cells if cell["id"] == "final-results")
+        self.assertIn("human_paired_differences.csv", "".join(results["source"]))
+        preparation = next(cell for cell in cells if cell["id"] == "hybridkla-preparation")
+        self.assertIn("export_hybridkla_splits.py", "".join(preparation["source"]))
+        self.assertIn("audit_hybridkla_overlap.py", "".join(preparation["source"]))
+        self.assertNotIn("run_replication.py", "".join(preparation["source"]))
 
     def test_separate_seed_outputs_aggregate_only_when_complete(self):
         import pandas as pd
