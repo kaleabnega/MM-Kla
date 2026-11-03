@@ -47,6 +47,9 @@ def parse_args() -> argparse.Namespace:
             "hybridkla-study-check",
             "hybridkla-study-development",
             "hybridkla-study",
+            "pcbert-revised-check",
+            "pcbert-revised-development",
+            "pcbert-revised",
         ],
         default="data-check",
     )
@@ -67,6 +70,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--hybridkla-study-lock", type=Path,
         default=PROJECT_DIR / "outputs/hybridkla_study_locked/split_audit.json",
+    )
+    parser.add_argument(
+        "--pcbert-revised-lock", type=Path,
+        default=PROJECT_DIR / "review_data/pcbert_revised_v1/split_audit.json",
     )
     parser.add_argument(
         "--sequence-format",
@@ -210,7 +217,55 @@ def run_data_check(train_split, test_split) -> None:
 def main() -> None:
     args = parse_args()
     if args.monitor_metric is None:
-        args.monitor_metric = "AUPRC" if args.run in {"window-diagnostic", "candidate-group-diagnostic", "source-study", "source-study-development", "human-study", "human-study-development", "hybridkla-source", "hybridkla-source-development", "hybridkla-study", "hybridkla-study-development"} else "ACC"
+        args.monitor_metric = "AUPRC" if args.run in {"window-diagnostic", "candidate-group-diagnostic", "source-study", "source-study-development", "human-study", "human-study-development", "hybridkla-source", "hybridkla-source-development", "hybridkla-study", "hybridkla-study-development", "pcbert-revised", "pcbert-revised-development"} else "ACC"
+
+    if args.run in {"pcbert-revised-check", "pcbert-revised-development", "pcbert-revised"}:
+        from pcbert_kla_clean.pcbert_revised import load_pcbert_revised
+
+        development, validation_indices, internal_test = load_pcbert_revised(
+            args.pcbert_revised_lock
+        )
+        report = {
+            "training_rows": len(development.records) - len(validation_indices),
+            "validation_rows": len(validation_indices),
+            "internal_test_rows": len(internal_test.records),
+            "revised_lock_sha256": hashlib.sha256(args.pcbert_revised_lock.read_bytes()).hexdigest(),
+            "scope": "retrospective candidate-homology diagnostic; no verified parent IDs or external study",
+        }
+        print(json.dumps(report, indent=2, sort_keys=True))
+        if args.run == "pcbert-revised-check":
+            return
+        if args.ablation != "none" or args.calibrate_threshold != "none":
+            raise ValueError("Primary revised comparison requires no ablation or threshold calibration")
+        if args.monitor_metric != "AUPRC" or args.decision_threshold != 0.5:
+            raise ValueError("Primary revised comparison requires validation AUPRC and threshold 0.5")
+        from pcbert_kla_clean.backbones import infer_site_token_index, load_tokenizer
+        from pcbert_kla_clean.experiments import train_and_predict_independent
+        import torch
+
+        if args.site_token_index is None:
+            args.site_token_index = infer_site_token_index(args.model_name)
+        args.device = resolve_device(args.device)
+        args.revised_lock_sha256 = report["revised_lock_sha256"]
+        config = {key: str(value) if isinstance(value, Path) else value
+                  for key, value in vars(args).items() if key != "output_dir"}
+        run_id = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:12]
+        output_dir = args.output_dir / "pcbert_revised" / "runs" / run_id
+        development_only = args.run == "pcbert-revised-development"
+        result = train_and_predict_independent(
+            args, development, None if development_only else internal_test, seed=args.seed,
+            tokenizer=load_tokenizer(args.model_name, args.cache_dir),
+            device=torch.device(args.device), output_dir=output_dir,
+            fixed_validation_indices=validation_indices,
+        )
+        if development_only:
+            print("\nRevised PCBert-Kla validation (development only):")
+            print(json.dumps({"loss": result["validation_loss"],
+                              **result["validation_metrics"]}, indent=2))
+        else:
+            print("\nRevised PCBert-Kla internal test:")
+            print(json.dumps({"loss": result["loss"], **result["metrics"]}, indent=2))
+        return
 
     if args.run in {"hybridkla-study-check", "hybridkla-study-development", "hybridkla-study"}:
         from pcbert_kla_clean.hybridkla_study import load_hybridkla_study

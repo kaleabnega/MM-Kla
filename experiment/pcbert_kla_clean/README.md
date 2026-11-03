@@ -69,6 +69,14 @@ eligibility rules, and interpretation limits. This does not replace the
 provisional workbook analysis above or establish exact reproduction of the
 authors' published scores.
 
+The [revised original-data notebook](kaggle_pcbert_revised.ipynb) freezes a
+deduplicated, candidate-homology-screened repartition of the released
+PCBert-Kla rows. Its [lock and audit](review_data/pcbert_revised_v1/README.md)
+retain 35 positive internal-test windows, versus seven positives if exact
+training overlaps are simply discarded from the old test. It remains an
+internal diagnostic because the released rows lack verified parent-protein
+identities and an independent study.
+
 The original train/test benchmark has exact sequence overlap. Previous metrics
 remain available for historical comparison, but they do not establish
 performance on unseen proteins. The current revision protocol and audit are
