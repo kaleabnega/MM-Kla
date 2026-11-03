@@ -43,6 +43,21 @@ seeds are available. Duplicate seeds and mismatched code commits or settings
 are rejected. The notebook output includes `final_seed_<seed>.json`, raw
 predictions, model checkpoints, logs, and the combined summary after seed 777.
 
+The [HybridKla-source Kaggle notebook](kaggle_hybridkla_source.ipynb) is a
+**second, provisional internal benchmark** from the official HybridKla
+workbook. It locks accession-grouped train/validation/internal-test partitions
+and offers matched PCBert-Kla/MM-Kla runs plus an architecture-aligned
+eight-branch HybridKla retraining with a fine-tuned ESM2. Preparation and
+integrity checks run by default; all training switches are initially off.
+RUN_HYBRIDKLA_TIMING measures one ESM2 training fold for one epoch without
+test inference. RUN_PAIRED_MODELS and RUN_HYBRIDKLA_FULL enable the
+respective full evaluations. The official archive is downloaded and
+checksum-checked at runtime, or can be supplied through LOCAL_ARCHIVE.
+The workbook lacks verified parent-protein provenance and an external mouse
+test, so these internal scores cannot establish generalization to a new study.
+The [source audit](review_data/hybridkla_v1/README.md) records exact counts,
+hashes, and further limitations.
+
 The original train/test benchmark has exact sequence overlap. Previous metrics
 remain available for historical comparison, but they do not establish
 performance on unseen proteins. The current revision protocol and audit are

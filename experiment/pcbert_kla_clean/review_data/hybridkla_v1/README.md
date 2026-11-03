@@ -1,5 +1,46 @@
 # HybridKla Reproduction Boundary
 
+## Provisional HybridKla-Source Benchmark
+
+The [second-benchmark Kaggle notebook](../../kaggle_hybridkla_source.ipynb)
+prepares the official-archive train/train_data.xlsx with
+scripts/lock_hybridkla_benchmark.py. The workbook is pinned by SHA-256 and
+is not redistributed. Of 47,004 source rows, 41,468 canonical 51-residue
+windows remain after excluding 5,536 noncanonical windows; no conflicting
+site labels or exact-window labels were found. The eligible set has 20,107
+positive and 21,361 negative-labelled rows. Exact sites/windows are deduplicated
+before the split. The deterministic accession-grouped partitions are:
+
+| Partition | Rows | Positive labels | Accession strings |
+| --- | ---: | ---: | ---: |
+| Train | 29,023 | 14,083 | 4,856 |
+| Validation | 4,148 | 2,000 | 749 |
+| Internal test | 8,297 | 4,024 | 1,385 |
+
+The local manifest SHA-256 is
+9628cd756316dc5d6234b259d5a5f0a2364460e300ac3e6ba9d654239599a955.
+The lock checks accession and exact-window disjointness. It does **not**
+verify that accession-like strings refer to the correct original proteins,
+separate homologous proteins, validate the provenance of every positive site,
+or supply a study-held-out/external test. Label 0 means a **putative negative**,
+not experimentally confirmed absence of lactylation. This is a provisional
+internal comparison, not a replacement for the primary KlaDB human benchmark
+or a complete resolution of the reviewers' dataset concerns.
+
+The notebook can train PCBert-Kla and MM-Kla on the same locked data and
+invoke scripts/run_hybridkla_architecture.py for an eight-branch HybridKla
+comparison. That runner fine-tunes ESM2 and uses five **protein-grouped**
+out-of-fold training splits, in contrast to the authors' row-wise folds.
+Its ESM2 pooling and binary-logit formulation also differ from the published
+script. It is therefore **architecture-aligned retraining**, not an exact
+reproduction. A one-fold, one-epoch ESM2 timing run is provided before the
+full run. No result is claimed until all three models have been trained and
+evaluated on this lock. The official top10.txt AAindex selection resource
+has not been traced to its original fitting rows; if it was selected using
+the whole published workbook, that selection would constitute another
+possible source of test information. This must be audited before a strict
+leakage-free claim for the HybridKla comparator.
+
 ## Purpose
 
 HybridKla is a reviewer-named comparator for the accession-labelled KlaDB

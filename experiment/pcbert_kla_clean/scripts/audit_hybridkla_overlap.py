@@ -23,7 +23,7 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def load_training_workbook(path: Path) -> tuple[dict[str, set[str]], dict, set[str], set[str]]:
+def read_workbook_rows(path: Path) -> list[dict[str, str]]:
     with ZipFile(path) as workbook:
         shared = []
         if "xl/sharedStrings.xml" in workbook.namelist():
@@ -55,10 +55,7 @@ def load_training_workbook(path: Path) -> tuple[dict[str, set[str]], dict, set[s
     if not {"UniProt_ID", "Sequence", "Label"}.issubset(header):
         raise ValueError("HybridKla workbook has unexpected columns")
 
-    sequences = defaultdict(set)
-    generic_ids = 0
-    site_ids = set()
-    accessions = set()
+    records = []
     for row in rows[1:]:
         values = row_values(row)
         sequence = values.get(header["Sequence"], "")
@@ -66,6 +63,20 @@ def load_training_workbook(path: Path) -> tuple[dict[str, set[str]], dict, set[s
         source_id = values.get(header["UniProt_ID"], "")
         if len(sequence) != 51 or sequence[25] != "K" or label not in {"0", "1"}:
             raise ValueError(f"Invalid sequence or label at workbook row {row.attrib.get('r')}")
+        records.append({"UniProt_ID": source_id, "Sequence": sequence, "Label": label})
+    return records
+
+
+def load_training_workbook(path: Path) -> tuple[dict[str, set[str]], dict, set[str], set[str]]:
+    records = read_workbook_rows(path)
+    sequences = defaultdict(set)
+    generic_ids = 0
+    site_ids = set()
+    accessions = set()
+    for record in records:
+        sequence = record["Sequence"]
+        label = record["Label"]
+        source_id = record["UniProt_ID"]
         sequences[sequence].add(label)
         generic_ids += bool(re.fullmatch(r"train\d+", source_id))
         site_match = re.fullmatch(r"([^_]+)_([1-9]\d*)", source_id)
@@ -73,7 +84,7 @@ def load_training_workbook(path: Path) -> tuple[dict[str, set[str]], dict, set[s
             site_ids.add(source_id)
             accessions.add(site_match.group(1))
     return dict(sequences), {
-        "rows": len(rows) - 1,
+        "rows": len(records),
         "unique_windows": len(sequences),
         "conflicting_window_labels": sum(len(labels) > 1 for labels in sequences.values()),
         "generic_train_ids": generic_ids,
