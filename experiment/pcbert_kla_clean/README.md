@@ -85,6 +85,9 @@ scores and group-aware intervals are generated from saved predictions.
 In the notebook configuration, set `RUN_PAIRED_MODELS = True` for the two
 ProtBert models and `RUN_HYBRIDKLA_FULL = True` for HybridKla. Set
 `RUN_HYBRIDKLA_PILOT = True` separately to estimate the ESM2 branch runtime.
+Set `RUN_SEED` to one of the predeclared seeds (`42`, `123`, `777`); each
+Kaggle saved version trains only that seed. Saved versions have separate
+working directories, so keep each version's output for later aggregation.
 If the official archive is attached to Kaggle rather than downloaded, set
 `LOCAL_HYBRIDKLA_ARCHIVE` to its path.
 
