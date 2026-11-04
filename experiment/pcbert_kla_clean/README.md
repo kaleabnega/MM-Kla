@@ -96,7 +96,7 @@ a split-preserving export. Section 9 of the Kaggle human notebook can run the
 export and overlap audit without training either existing architecture: set
 `RUN_CAPPED_PILOT = False`, `RUN_FULL_EPOCH_TIMING = False`,
 `RUN_FINAL_EVALUATION = False`, and `RUN_HYBRIDKLA_PREPARATION = True`. It uses
-a separate `hybridkla-benchmark` checkout and records its commit. This section
+a separate `main` checkout and records its commit. This section
 does not train HybridKla or produce a HybridKla score. Section 10 runs an
 exploratory eight-branch **HybridKla-adapted** model. First set
 `RUN_HYBRIDKLA_PILOT = True` for a one-epoch training-only smoke test that
