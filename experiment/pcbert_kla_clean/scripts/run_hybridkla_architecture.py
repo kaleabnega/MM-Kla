@@ -1,4 +1,4 @@
-"""Retrain HybridKla's eight-branch architecture on a locked source benchmark.
+"""Retrain HybridKla's eight-branch architecture on a locked benchmark.
 
 The authors' published row-wise CV is replaced by protein-grouped out-of-fold
 stacking, and checkpoints are selected on the locked validation partition.
@@ -31,6 +31,7 @@ from pcbert_kla_clean.hybridkla_models import (
     FeatureDNN, MetaDNN, SequenceLSTM, average_precision,
     encode_lstm_sequences, fit_predictor, predict_scores,
 )
+from pcbert_kla_clean.pcbert_revised import load_pcbert_revised
 from run_hybridkla_adapted import BRANCHES, RESOURCE_SHA256, evaluate_and_save, partition_labels, sha256
 
 
@@ -188,6 +189,18 @@ def grouped_folds(rows: list[dict[str, str]], folds: int, seed: int) -> list[lis
 
 def read_lock(lock_path: Path) -> tuple[dict[str, list[dict[str, str]]], dict]:
     audit = json.loads(lock_path.read_text())
+    if audit.get("protocol") == "Repartitioned released PCBert-Kla windows; candidate-homology-screened diagnostic":
+        load_pcbert_revised(lock_path)
+        with lock_path.with_name("model_manifest.csv").open(newline="") as handle:
+            revised_rows = list(csv.DictReader(handle))
+        partitions = {name: [] for name in ("train", "validation", "internal_test", "external_test")}
+        for row in revised_rows:
+            adapted = {**row, "window_51aa": row["sequence"],
+                       "group_id": row["candidate_group"],
+                       "source_site_id": row["window_id"]}
+            partitions[row["partition"]].append(adapted)
+        return partitions, audit
+
     manifest = lock_path.with_name("model_manifest.csv")
     study_lock = "output_sha256" in audit
     expected_sha = (audit["output_sha256"]["model_manifest.csv"] if study_lock

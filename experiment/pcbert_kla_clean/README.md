@@ -75,7 +75,18 @@ PCBert-Kla rows. Its [lock and audit](review_data/pcbert_revised_v1/README.md)
 retain 35 positive internal-test windows, versus seven positives if exact
 training overlaps are simply discarded from the old test. It remains an
 internal diagnostic because the released rows lack verified parent-protein
-identities and an independent study.
+identities and an independent study. The notebook can retrain PCBert-Kla,
+MM-Kla, and architecture-aligned HybridKla on the same locked rows. The
+HybridKla run requires the pinned official feature-resource archive, uses its
+own sequence-derived descriptors rather than the released 27 features, and
+has a substantially larger training budget. Its one-fold ESM2 timing pilot
+does not score the test. All model runs are disabled by default; completed
+scores and group-aware intervals are generated from saved predictions.
+In the notebook configuration, set `RUN_PAIRED_MODELS = True` for the two
+ProtBert models and `RUN_HYBRIDKLA_FULL = True` for HybridKla. Set
+`RUN_HYBRIDKLA_PILOT = True` separately to estimate the ESM2 branch runtime.
+If the official archive is attached to Kaggle rather than downloaded, set
+`LOCAL_HYBRIDKLA_ARCHIVE` to its path.
 
 The original train/test benchmark has exact sequence overlap. Previous metrics
 remain available for historical comparison, but they do not establish

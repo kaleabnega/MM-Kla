@@ -28,7 +28,7 @@ python scripts/lock_pcbert_revised.py --output-dir review_data/pcbert_revised_v1
 python scripts/run_replication.py --run pcbert-revised-check
 ```
 
-The [Kaggle notebook](../../kaggle_pcbert_revised.ipynb) checks byte-for-byte regeneration and runs matched PCBert-Kla/MM-Kla experiments across predeclared seeds. It reports descriptive candidate-group bootstrap intervals for AUPRC and AUC. The internal test must not determine hyperparameters, thresholds, architecture changes, or seed selection. The released negative labels are not experimentally confirmed non-lactylated sites.
+The [Kaggle notebook](../../kaggle_pcbert_revised.ipynb) checks byte-for-byte regeneration and can train PCBert-Kla, MM-Kla, and architecture-aligned HybridKla across predeclared seeds. HybridKla uses the same locked windows and labels but its own sequence-derived descriptors, five-fold grouped stacking, and branch-specific training schedules; it is neither equal-compute nor an exact reproduction of the published HybridKla training. Its official feature-resource archive is checksum-verified at runtime. The notebook reports descriptive candidate-group bootstrap intervals for AUPRC and AUC. The internal test must not determine hyperparameters, thresholds, architecture changes, or seed selection. The released negative labels are not experimentally confirmed non-lactylated sites.
 
 ## Remaining Limits
 
