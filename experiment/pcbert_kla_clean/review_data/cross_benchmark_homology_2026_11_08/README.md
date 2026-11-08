@@ -61,16 +61,36 @@ external-study partition has 254 positives and 4,841 putative negatives from
 81 proteins. In contrast, the **whole KlaDB benchmark is not protein-disjoint
 from the full revised training partition at this search threshold**.
 
+### Original, unrevised PCBert-Kla training file
+
+The proposed alternative training source is the released `train.csv` (SHA-256
+`5a2f2f220c4761b963b9c4487573f4d6fad516d820ef29837c8553075fa05824`).
+Its 3,487 rows contain 1,839 distinct 51-residue windows. All 1,839 windows
+have a candidate accession in the source mapping, collectively covering all
+180 proteins in the revised-candidate FASTA searched above. The KlaDB
+external-study partition has 5,095 distinct windows from 81 proteins.
+
+Direct comparison of the **unrevised training file** with that external-study
+partition found **zero identical 51-residue windows** and **zero qualifying
+candidate-protein similarity pairs** in the bidirectional searches. Thus the
+external-study result above also applies to the complete original training
+file at the stated thresholds; it is not limited to the revised training
+subset. This does not address repetition *within* the original training file.
+
 ## Interpretation and limits
 
 The KlaDB external-study test is the appropriate predeclared candidate for
-inference-only evaluation of the revised-data models. No qualifying cross-
+inference-only evaluation of either training protocol. No qualifying cross-
 benchmark hit was detected for that partition under the stated search. This
 is a thresholded homology screen, not proof that no shorter shared domains,
 remote homologues, or unknown source-protein relationships exist. The revised
 PCBert-Kla accessions are sequence-matched candidates, **not verified original
 parent-protein IDs**. The KlaDB data have also been examined previously during
 this project, so this is not a pristine, never-inspected test.
+
+Using the unrevised 3,487-row training file as-is still retains its repeated
+positive windows and does not fulfill the reviewers' separate request to
+deduplicate before oversampling.
 
 External inference must use the previously selected checkpoints, fixed
 decision rules, and training-fitted feature preprocessing. Training or
