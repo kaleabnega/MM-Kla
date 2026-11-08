@@ -124,16 +124,19 @@ def predict_scores(model: nn.Module, values: np.ndarray, device: torch.device,
 class TrainingResult:
     model: nn.Module
     selected_epoch: int
-    validation_auprc: float
+    validation_auprc: float | None
 
 
 def fit_predictor(
     model: nn.Module, train_values: np.ndarray, train_labels: np.ndarray,
-    validation_values: np.ndarray, validation_labels: np.ndarray,
+    validation_values: np.ndarray | None, validation_labels: np.ndarray | None,
     *, device: torch.device, epochs: int, batch_size: int,
-    learning_rate: float, patience: int, seed: int,
+    learning_rate: float, patience: int, seed: int, fixed_epochs: bool = False,
 ) -> TrainingResult:
-    if len(train_values) != len(train_labels) or len(validation_values) != len(validation_labels):
+    if len(train_values) != len(train_labels) or (
+        not fixed_epochs and (validation_values is None or validation_labels is None
+                              or len(validation_values) != len(validation_labels))
+    ):
         raise ValueError("Feature and label rows differ")
     if len(train_values) < 2 or batch_size < 2 or epochs < 1 or patience < 0:
         raise ValueError("Invalid training size or hyperparameters")
@@ -162,6 +165,8 @@ def fit_predictor(
                 raise FloatingPointError(f"Nonfinite loss at epoch {epoch}")
             loss.backward()
             optimizer.step()
+        if fixed_epochs:
+            continue
         scores = predict_scores(model, validation_values, device,
                                 batch_size=max(batch_size, 32))
         auprc = average_precision(validation_labels, scores)
@@ -171,6 +176,9 @@ def fit_predictor(
             selected_epoch = epoch
         if patience and epoch - selected_epoch >= patience:
             break
+    if fixed_epochs:
+        return TrainingResult(model=model, selected_epoch=epochs,
+                              validation_auprc=None)
     if best_state is None:
         raise RuntimeError("No finite checkpoint was selected")
     model.load_state_dict(best_state)

@@ -109,15 +109,17 @@ Create a **private** Kaggle dataset from both files in
 `kladb_human_external_test.csv` and `external_test_manifest.json`. These files
 are ignored by Git. In Kaggle, attach that dataset, enable Internet and two
 T4 GPUs, and provide a `GITHUB_TOKEN` Kaggle Secret with read access to this
-repository. Run the notebook preflight, select `RUN_SEEDS` (predeclared: 42,
-123, 777), and set `RUN_TRAINING = True` for the two ProtBert models. Each
-uses one GPU. A candidate-homology-grouped validation subset selects the
-epoch; the two models are refit on **all 3,487 original rows** before external
-inference. Set `RUN_HYBRIDKLA_PILOT = True` for a one-fold ESM2 timing check
-without test inference. Set `RUN_HYBRIDKLA_FULL = True` for a three-model
-matched-subset comparison. This also runs a *separate* PCBert-Kla/MM-Kla pair
-on exactly the grouped original-source training rows used by HybridKla;
-HybridKla's grouped out-of-fold stacking and training budget remain distinct.
+repository. The notebook declares seeds 42, 123, and 777 and has
+`RUN_THREE_MODEL = True` for a single three-model run. The two ProtBert models
+use one GPU each. A candidate-homology-grouped validation subset selects
+their epoch counts (at most 30), after which they are reinitialized and
+refit on **all 3,487 original rows**. HybridKla selects each branch-fold and
+meta-classifier epoch count using the same validation partition, then rebuilds
+its five-fold out-of-fold stack over all 3,487 rows before external inference.
+Each HybridKla fold model trains on four-fifths of the source; the complete
+stack and meta-classifier use every row. `RUN_HYBRIDKLA_PILOT = True` enables
+an optional one-fold ESM2 timing check without test inference. Three full
+HybridKla refits may exceed a free-tier session or weekly GPU quota.
 The official HybridKla resource archive is downloaded and checksum-checked,
 or can be supplied through `LOCAL_HYBRIDKLA_ARCHIVE` if download fails.
 The external study is scored only after model selection. The original

@@ -23,7 +23,7 @@ def load_runner():
 
 
 class OriginalKladbExternalNotebookTests(unittest.TestCase):
-    def test_notebook_cells_compile_and_training_is_opt_in(self):
+    def test_notebook_cells_compile_and_run_three_full_data_models(self):
         path = PROJECT / "kaggle_original_train_kladb_external.ipynb"
         notebook = json.loads(path.read_text())
         self.assertEqual(notebook["nbformat"], 4)
@@ -36,9 +36,11 @@ class OriginalKladbExternalNotebookTests(unittest.TestCase):
                 self.assertIsNone(cell["execution_count"])
                 self.assertEqual(notebook["cells"][index - 1]["cell_type"], "markdown")
                 code.append(source)
-        self.assertIn("RUN_TRAINING = False", code[0])
+        self.assertIn("RUN_THREE_MODEL = True", code[0])
         self.assertIn("RUN_HYBRIDKLA_PILOT = False", code[0])
-        self.assertIn("RUN_HYBRIDKLA_FULL = False", code[0])
+        self.assertIn("RUN_SEEDS = (42, 123, 777)", code[0])
+        self.assertIn("HYBRID_ESM_EPOCHS = 40", code[0])
+        self.assertIn("HYBRID_META_EPOCHS = 50", code[0])
         self.assertIn("DECLARED_SEEDS = (42, 123, 777)", code[0])
         self.assertIn("--check-only", "\n".join(code))
         self.assertIn("cuda:1", "\n".join(code))
@@ -46,9 +48,10 @@ class OriginalKladbExternalNotebookTests(unittest.TestCase):
         self.assertIn("--original-external-csv", "\n".join(code))
         self.assertIn("--training-scope", "\n".join(code))
         self.assertIn("--pilot", "\n".join(code))
-        self.assertIn("matched_three_model_summary.csv", "\n".join(code))
-        self.assertIn("full_original_refit", "\n".join(code))
-        self.assertIn("matched_grouped_subset", "\n".join(code))
+        self.assertIn("--full-refit", "\n".join(code))
+        self.assertIn("--esm-epochs", "\n".join(code))
+        self.assertIn("three_model_summary.csv", "\n".join(code))
+        self.assertNotIn("matched_subset", "\n".join(code))
 
     def test_external_export_is_deterministic_when_source_is_available(self):
         source = PROJECT / "outputs/kladb_human_locked/full_manifest.csv"
@@ -102,12 +105,15 @@ class OriginalKladbExternalNotebookTests(unittest.TestCase):
             train_idx, val_idx, validation = grouped_validation_indices(train, mapping, clusters, seed)
             self.assertEqual(len(partitions["train"]), len(train_idx))
             self.assertEqual(len(partitions["validation"]), len(val_idx))
+            self.assertEqual(len(partitions["full_train"]), 3487)
+            self.assertEqual(sum(row["label"] == "1" for row in partitions["full_train"]), 1720)
             self.assertEqual(audit["training_indices_sha256"], validation["training_indices_sha256"])
             self.assertEqual(audit["validation_indices_sha256"], validation["validation_indices_sha256"])
             self.assertEqual(len(partitions["external_test"]), 5095)
             self.assertEqual(sum(len(fold) for fold in grouped_folds(partitions["train"], 5, seed)), len(train_idx))
+            self.assertEqual(sum(len(fold) for fold in grouped_folds(partitions["full_train"], 5, seed)), 3487)
 
-    def test_result_tables_keep_full_refit_and_three_model_subset_separate(self):
+    def test_result_table_requires_full_data_refits(self):
         external_dir = PROJECT / "outputs/kladb_external_upload"
         external_csv = external_dir / "kladb_human_external_test.csv"
         if not external_csv.is_file():
@@ -123,17 +129,16 @@ class OriginalKladbExternalNotebookTests(unittest.TestCase):
         split_hash = ("training-hash", "validation-hash")
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary)
-            for scope, architecture in (("full_refit", "baseline"), ("grouped_subset", "baseline"),
-                                        ("grouped_subset", "token_gated")):
-                destination = output / "seed_42" / (architecture if scope == "full_refit" else f"matched_subset/{architecture}")
+            for architecture in ("baseline", "token_gated"):
+                destination = output / "seed_42" / architecture
                 destination.mkdir(parents=True)
                 report = {
-                    "seed": 42, "architecture": architecture, "training_scope": scope,
-                    "git_commit": "test-commit", "selected_epoch": 3,
+                    "seed": 42, "architecture": architecture, "training_scope": "full_refit",
+                    "git_commit": "test-commit", "selected_epoch": 3, "refit_epochs": 3,
                     "preflight": {"external_sha256": manifest["sha256"], "validation": {
                         "training_indices_sha256": split_hash[0], "validation_indices_sha256": split_hash[1]}},
-                    "refit_training": {"training_positive_rows": 1720 if scope == "full_refit" else 1380,
-                                       "training_negative_rows": 1767 if scope == "full_refit" else 1435},
+                    "refit_training": {"training_positive_rows": 1720,
+                                       "training_negative_rows": 1767},
                     "external_metrics": metrics,
                 }
                 (destination / "run_report.json").write_text(json.dumps(report))
@@ -146,9 +151,11 @@ class OriginalKladbExternalNotebookTests(unittest.TestCase):
                 "seed": 42, "git_commit": "test-commit", "mode": "locked-test-evaluation",
                 "benchmark_lock_sha256": hashlib.sha256(manifest_file.read_bytes()).hexdigest(),
                 "benchmark_input_audit": {"external_csv_sha256": manifest["sha256"],
-                    "training_rows": 2815, "training_scope": "grouped training subset; no full-data refit",
+                    "training_rows": 2815, "refit_training_rows": 3487,
+                    "training_scope": "full original training rows; grouped OOF stacking",
                     "training_indices_sha256": split_hash[0], "validation_indices_sha256": split_hash[1]},
                 "fold_reports": {"META": {"selected_epoch": 2}},
+                "full_refit_fold_reports": {"META": {"trained_epochs": 2}},
                 "test_metrics": {"external_test": metrics},
             }))
             pd.DataFrame({"Site_ID": names, "Label": locked["label"], "Score": 0.5}).to_csv(
@@ -156,7 +163,7 @@ class OriginalKladbExternalNotebookTests(unittest.TestCase):
             notebook = json.loads((PROJECT / "kaggle_original_train_kladb_external.ipynb").read_text())
             source = "".join(next(cell["source"] for cell in notebook["cells"]
                                   if cell["cell_type"] == "code" and
-                                  "matched_three_model_summary.csv" in "".join(cell["source"])))
+                                  "three_model_summary.csv" in "".join(cell["source"])))
             namespace = {"OUTPUT": output, "EXTERNAL_CSV": external_csv,
                          "EXTERNAL_MANIFEST": manifest_file, "COMMIT": "test-commit",
                          "DECLARED_SEEDS": (42, 123, 777), "manifest": manifest,
@@ -165,10 +172,9 @@ class OriginalKladbExternalNotebookTests(unittest.TestCase):
                          "display": lambda _: None}
             exec(source, namespace)
             results = namespace["results"]
-            self.assertEqual(len(results), 4)
-            self.assertEqual(set(results["comparison_scope"]),
-                             {"full_original_refit", "matched_grouped_subset"})
-            self.assertFalse((output / "matched_three_model_summary.csv").exists())
+            self.assertEqual(len(results), 3)
+            self.assertEqual(set(results["training_rows"]), {3487})
+            self.assertFalse((output / "three_model_summary.csv").exists())
 
 
 if __name__ == "__main__":

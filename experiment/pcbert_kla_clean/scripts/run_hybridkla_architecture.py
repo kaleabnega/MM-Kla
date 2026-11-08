@@ -71,6 +71,7 @@ def read_original_kladb(args: argparse.Namespace) -> tuple[dict[str, list[dict[s
 
     partitions = {"train": [original_row(int(index)) for index in train_idx],
                   "validation": [original_row(int(index)) for index in val_idx],
+                  "full_train": [original_row(index) for index in range(len(train.records))],
                   "internal_test": [],
                   "external_test": [
                       {"window_51aa": record.sequence, "label": str(record.label),
@@ -87,6 +88,7 @@ def read_original_kladb(args: argparse.Namespace) -> tuple[dict[str, list[dict[s
         "homology_clusters_sha256": sha256(clusters),
         "external_csv_sha256": manifest["sha256"],
         "training_rows": len(partitions["train"]),
+        "full_training_rows": len(partitions["full_train"]),
         "validation_unique_windows": len(partitions["validation"]),
         "training_indices_sha256": validation["training_indices_sha256"],
         "validation_indices_sha256": validation["validation_indices_sha256"],
@@ -151,13 +153,15 @@ def esm_scores(model: nn.Module, tokens: tuple[torch.Tensor, ...],
 
 
 def train_esm_fold(model_name: str, revision: str, tokenizer,
-                   train_rows: list[dict[str, str]], validation_rows: list[dict[str, str]],
+                   train_rows: list[dict[str, str]], validation_rows: list[dict[str, str]] | None,
                    *, device: torch.device, epochs: int, batch_size: int,
-                   patience: int, seed: int, checkpoint: Path) -> dict:
+                   patience: int, seed: int, checkpoint: Path,
+                   fixed_epochs: bool = False) -> dict:
     torch.manual_seed(seed)
     model = TrainableEsmBranch(model_name, revision).to(device)
     train_tokens = tokenize_sequences([row["window_51aa"] for row in train_rows], tokenizer)
-    val_tokens = tokenize_sequences([row["window_51aa"] for row in validation_rows], tokenizer)
+    val_tokens = (None if fixed_epochs else tokenize_sequences(
+        [row["window_51aa"] for row in validation_rows], tokenizer))
     labels = torch.tensor(partition_labels([{"Label": row["label"]} for row in train_rows]),
                           dtype=torch.float32)
     data = TensorDataset(*train_tokens, labels)
@@ -175,7 +179,8 @@ def train_esm_fold(model_name: str, revision: str, tokenizer,
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, rate)
     scaler = torch.cuda.amp.GradScaler(enabled=device.type == "cuda")
     criterion = nn.BCEWithLogitsLoss()
-    val_labels = partition_labels([{"Label": row["label"]} for row in validation_rows])
+    val_labels = (None if fixed_epochs else partition_labels(
+        [{"Label": row["label"]} for row in validation_rows]))
     best_ap, selected_epoch, completed = -1.0, 0, 0
     started = time.monotonic()
     if device.type == "cuda":
@@ -196,6 +201,8 @@ def train_esm_fold(model_name: str, revision: str, tokenizer,
             scaler.update()
             scheduler.step()
         completed = epoch
+        if fixed_epochs:
+            continue
         scores = esm_scores(model, val_tokens, device, batch_size)
         ap = average_precision(val_labels, scores)
         print(f"ESM2 epoch {epoch}/{epochs}: validation AUPRC {ap:.4f}", flush=True)
@@ -205,9 +212,15 @@ def train_esm_fold(model_name: str, revision: str, tokenizer,
                        checkpoint)
         if patience and epoch - selected_epoch >= patience:
             break
-    if not checkpoint.is_file():
+    if fixed_epochs:
+        selected_epoch = epochs
+        best_ap = None
+        torch.save({key: value.detach().cpu() for key, value in model.state_dict().items()},
+                   checkpoint)
+    elif not checkpoint.is_file():
         raise RuntimeError("No ESM2 checkpoint was selected")
-    model.load_state_dict(torch.load(checkpoint, map_location=device, weights_only=True))
+    else:
+        model.load_state_dict(torch.load(checkpoint, map_location=device, weights_only=True))
     report = {"selected_epoch": selected_epoch, "completed_epochs": completed,
               "validation_auprc": best_ap,
               "wall_seconds": round(time.monotonic() - started, 1),
@@ -246,6 +259,76 @@ def grouped_folds(rows: list[dict[str, str]], folds: int, seed: int) -> list[lis
     if sorted(index for indices in fold_indices for index in indices) != list(range(len(rows))):
         raise AssertionError("Grouped folds do not partition training rows")
     return fold_indices
+
+
+def refit_full_stack(args: argparse.Namespace, rows: list[dict[str, str]],
+                     selected: dict, resources, tokenizer, revision: str,
+                     device: torch.device, checkpoint_dir: Path,
+                     output: Path) -> tuple[dict, list[list[int]], nn.Module]:
+    """Fit OOF branches and the meta model on every original training row."""
+    folds = grouped_folds(rows, 5, args.seed)
+    all_indices = set(range(len(rows)))
+    labels = np.asarray([int(row["label"]) for row in rows])
+    oof = np.empty((len(rows), len(BRANCHES)), dtype=np.float32)
+    reports = {}
+    for column, name in enumerate(BRANCHES):
+        for fold, holdout_indices in enumerate(folds):
+            held = set(holdout_indices)
+            fit_rows = [rows[index] for index in sorted(all_indices - held)]
+            held_rows = [rows[index] for index in holdout_indices]
+            epoch_count = int(selected[f"{name}_fold_{fold}"]["selected_epoch"])
+            seed = args.seed + column * 100 + fold
+            checkpoint = checkpoint_dir / f"{name}_fold_{fold}.pth"
+            if name == "ESM2":
+                result = train_esm_fold(
+                    args.esm_model, revision, tokenizer, fit_rows, None,
+                    device=device, epochs=epoch_count, batch_size=args.esm_batch_size,
+                    patience=0, seed=seed, checkpoint=checkpoint, fixed_epochs=True,
+                )
+                model = result["model"]
+                scores = esm_scores(model, tokenize_sequences(
+                    [row["window_51aa"] for row in held_rows], tokenizer),
+                    device, args.esm_batch_size)
+                reports[f"{name}_fold_{fold}"] = result["report"]
+                del result, model
+                if device.type == "cuda":
+                    torch.cuda.empty_cache()
+            else:
+                gps_reference = fit_gps_reference([row["window_51aa"] for row in fit_rows])
+                if name == "GPS":
+                    np.save(output / f"GPS_fold_{fold}_reference.npy", gps_reference)
+                fit_values = branch_arrays(name, fit_rows, resources, gps_reference)
+                held_values = branch_arrays(name, held_rows, resources, gps_reference)
+                batch_size = args.lstm_batch_size if name == "LSTM" else args.feature_batch_size
+                result = fit_predictor(
+                    SequenceLSTM() if name == "LSTM" else FeatureDNN(name),
+                    fit_values, np.asarray([int(row["label"]) for row in fit_rows]),
+                    None, None, device=device, epochs=epoch_count, batch_size=batch_size,
+                    learning_rate=1e-4 if name == "LSTM" else 1e-3,
+                    patience=0, seed=seed, fixed_epochs=True,
+                )
+                model = result.model
+                torch.save({key: value.detach().cpu() for key, value in model.state_dict().items()},
+                           checkpoint)
+                scores = predict_scores(model, held_values, device,
+                                        batch_size=128 if name == "LSTM" else 1024)
+                reports[f"{name}_fold_{fold}"] = {"trained_epochs": epoch_count}
+                del result, model
+            oof[holdout_indices, column] = scores
+            print(f"Full-data refit: {name} fold {fold + 1}/5, {epoch_count} epochs", flush=True)
+    if not np.isfinite(oof).all():
+        raise FloatingPointError("Nonfinite full-data out-of-fold scores")
+    meta_epochs = int(selected["META"]["selected_epoch"])
+    meta_result = fit_predictor(
+        MetaDNN(), oof, labels, None, None, device=device,
+        epochs=meta_epochs, batch_size=args.feature_batch_size,
+        learning_rate=1e-3, patience=0, seed=args.seed + 1000,
+        fixed_epochs=True,
+    )
+    torch.save({key: value.detach().cpu() for key, value in meta_result.model.state_dict().items()},
+               checkpoint_dir / "META.pth")
+    reports["META"] = {"trained_epochs": meta_epochs}
+    return reports, folds, meta_result.model
 
 
 def read_lock(lock_path: Path) -> tuple[dict[str, list[dict[str, str]]], dict]:
@@ -357,6 +440,7 @@ def run(args: argparse.Namespace) -> dict:
     resources = load_resources(args.resource_dir / "top10.txt", args.resource_dir / "BLOSUM62R.txt")
     val_labels = np.asarray([int(row["label"]) for row in validation_rows])
     fold_reports = {}
+    refit_reports = None
     if args.pilot:
         holdout = set(folds[0])
         base_rows = [train_rows[index] for index in sorted(all_indices - holdout)]
@@ -439,6 +523,19 @@ def run(args: argparse.Namespace) -> dict:
                    checkpoint_dir / "META.pth")
         fold_reports["META"] = {"selected_epoch": meta_result.selected_epoch,
                                 "validation_auprc": meta_result.validation_auprc}
+        if args.full_refit:
+            full_rows = partitions["full_train"]
+            if len(full_rows) != 3487 or sum(row["label"] == "1" for row in full_rows) != 1720:
+                raise ValueError("Full-data HybridKla refit source changed")
+            refit_reports, folds, refit_model = refit_full_stack(
+                args, full_rows, fold_reports, resources, tokenizer, revision,
+                device, checkpoint_dir, output,
+            )
+            meta_result.model = refit_model
+            train_rows = full_rows
+            all_indices = set(range(len(train_rows)))
+            audit["training_scope"] = "full original training rows; grouped OOF stacking"
+            audit["refit_training_rows"] = len(train_rows)
         test_metrics = {}
         for test_name in ("internal_test", "external_test"):
             test_rows = partitions[test_name]
@@ -501,6 +598,7 @@ def run(args: argparse.Namespace) -> dict:
                             "feature_batch_size": args.feature_batch_size,
                             "patience": args.patience},
         "fold_reports": fold_reports,
+        "full_refit_fold_reports": refit_reports,
         "test_metrics": test_metrics,
         "wall_seconds": round(time.monotonic() - started, 1),
     }
@@ -527,6 +625,7 @@ def main() -> None:
     parser.add_argument("--feature-batch-size", type=int, default=2048)
     parser.add_argument("--patience", type=int, default=6)
     parser.add_argument("--pilot", action="store_true")
+    parser.add_argument("--full-refit", action="store_true")
     args = parser.parse_args()
     if (args.benchmark_lock is None) == (args.original_external_csv is None):
         parser.error("Select exactly one of --benchmark-lock or --original-external-csv")
@@ -534,6 +633,8 @@ def main() -> None:
         parser.error("--original-external-manifest is required with --original-external-csv")
     if args.original_external_csv is None and args.original_external_manifest is not None:
         parser.error("--original-external-manifest requires --original-external-csv")
+    if args.full_refit and (args.original_external_csv is None or args.pilot):
+        parser.error("--full-refit requires original external mode without --pilot")
     print(json.dumps(run(args), indent=2, sort_keys=True))
 
 
