@@ -94,8 +94,8 @@ If the official archive is attached to Kaggle rather than downloaded, set
 ### Original-training to external-study experiment
 
 The [Kaggle original-training/external-study notebook](kaggle_original_train_kladb_external.ipynb)
-trains PCBert-Kla and MM-Kla on the released, unrevised 3,487-row training
-file, then evaluates both on the locked KlaDB human study holdout. The
+compares PCBert-Kla, MM-Kla, and architecture-aligned HybridKla using the
+released, unrevised training source and locked KlaDB human study holdout. The
 original training file is cloned with the private repository; **only the
 external-study export needs a Kaggle dataset upload**. Generate the two files
 locally with:
@@ -109,11 +109,18 @@ Create a **private** Kaggle dataset from both files in
 `kladb_human_external_test.csv` and `external_test_manifest.json`. These files
 are ignored by Git. In Kaggle, attach that dataset, enable Internet and two
 T4 GPUs, and provide a `GITHUB_TOKEN` Kaggle Secret with read access to this
-repository. Run the notebook preflight, then set `RUN_TRAINING = True` and
-select the desired `RUN_SEEDS` (predeclared: 42, 123, 777). Each architecture
-uses one GPU. A candidate-homology-grouped validation subset of the original
-training file selects the epoch; a fresh model is then refit on **all 3,487
-rows**. The external study is scored once after refitting. The original
+repository. Run the notebook preflight, select `RUN_SEEDS` (predeclared: 42,
+123, 777), and set `RUN_TRAINING = True` for the two ProtBert models. Each
+uses one GPU. A candidate-homology-grouped validation subset selects the
+epoch; the two models are refit on **all 3,487 original rows** before external
+inference. Set `RUN_HYBRIDKLA_PILOT = True` for a one-fold ESM2 timing check
+without test inference. Set `RUN_HYBRIDKLA_FULL = True` for a three-model
+matched-subset comparison. This also runs a *separate* PCBert-Kla/MM-Kla pair
+on exactly the grouped original-source training rows used by HybridKla;
+HybridKla's grouped out-of-fold stacking and training budget remain distinct.
+The official HybridKla resource archive is downloaded and checksum-checked,
+or can be supplied through `LOCAL_HYBRIDKLA_ARCHIVE` if download fails.
+The external study is scored only after model selection. The original
 training duplicates remain, and its candidate parent-protein identities are
 not verified. The independent-study negatives are putative. This same KlaDB
 holdout was examined in earlier project experiments, so it is not a fresh

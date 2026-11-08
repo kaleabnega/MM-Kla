@@ -112,7 +112,9 @@ def grouped_validation_indices(train, mapping_path: Path, clusters_path: Path, s
                                          "validation_positive_windows": int(train.labels[val_indices].sum()),
                                          "training_positive_rows": int(train.labels[train_indices].sum()),
                                          "training_unique_windows": len({train.sequences[i] for i in train_indices}),
-                                         "validation_group_count": len({groups_by_sequence[train.sequences[i]] for i in val_indices})}
+                                         "validation_group_count": len({groups_by_sequence[train.sequences[i]] for i in val_indices}),
+                                         "training_indices_sha256": hashlib.sha256(train_indices.tobytes()).hexdigest(),
+                                         "validation_indices_sha256": hashlib.sha256(val_indices.tobytes()).hexdigest()}
 
 
 def save_external_predictions(path: Path, split, scores) -> None:
@@ -139,6 +141,7 @@ def args_parser():
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument("--training-scope", choices=["full_refit", "grouped_subset"], default="full_refit")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--check-only", action="store_true")
     parser.add_argument("--mapping-csv", type=Path, default=REPO / "experiment-1/structure_aware_kla/results/botrytis_b0510_window_mapping/all_window_matches.csv")
@@ -179,7 +182,8 @@ def main() -> None:
                  "candidate_mapping_sha256": sha256(args.mapping_csv),
                  "homology_clusters_sha256": sha256(args.clusters_csv),
                  "selection": "highest grouped-validation AUPRC; earliest epoch on ties",
-                 "external_use": "one final inference after full-data refit", "threshold": 0.5}
+                 "external_use": "one final inference after model selection", "threshold": 0.5,
+                 "training_scope": args.training_scope}
     print(json.dumps(preflight, indent=2), flush=True)
     if args.check_only:
         return
@@ -212,6 +216,8 @@ def main() -> None:
     model = build_model(args, feature_dim=27, device=device)
     optimizer = build_optimizer(args, model)
     history = []
+    best_auprc = -1.0
+    best_checkpoint = args.output_dir / "best_validation_model.pt"
     for epoch in range(1, args.epochs + 1):
         loss = train_one_epoch(model, train_loader, optimizer, criterion, device)
         val_loss, labels, scores = predict(model, val_loader, criterion, device)
@@ -219,26 +225,34 @@ def main() -> None:
             raise ValueError(f"Invalid validation probabilities in epoch {epoch}")
         metrics = compute_binary_metrics(labels, scores, threshold=0.5)
         history.append({"epoch": epoch, "train_loss": loss, "validation_loss": val_loss, **metrics})
+        if args.training_scope == "grouped_subset" and metrics["AUPRC"] > best_auprc:
+            best_auprc = metrics["AUPRC"]
+            torch.save(model.state_dict(), best_checkpoint)
         print(f"{args.architecture} seed={args.seed} validation epoch={epoch} AUPRC={metrics['AUPRC']:.4f}", flush=True)
     selected = max(history, key=lambda item: item["AUPRC"])
     (args.output_dir / "validation_history.json").write_text(json.dumps(history, indent=2) + "\n")
-    del model, optimizer, train_loader, val_loader, scaler_selection
-    gc.collect()
-    torch.cuda.empty_cache()
-
-    set_seed(args.seed)
-    all_idx = np.arange(len(train.records))
-    criterion, weights = make_training_criterion(train.labels, all_idx, "none")
-    scaler = MinMaxScaler().fit(train.features)
-    scaled_full = scaler.transform(train.features).astype(np.float32)
-    full_loader = make_loader(train, all_idx, scaled_full, tokenizer, args.batch_size, True, 64, "protbert_spaced")
-    model = build_model(args, feature_dim=27, device=device)
-    optimizer = build_optimizer(args, model)
-    refit_losses = []
-    for epoch in range(1, selected["epoch"] + 1):
-        loss = train_one_epoch(model, full_loader, optimizer, criterion, device)
-        refit_losses.append(loss)
-        print(f"{args.architecture} seed={args.seed} full refit epoch={epoch}/{selected['epoch']} loss={loss:.4f}", flush=True)
+    if args.training_scope == "grouped_subset":
+        model.load_state_dict(torch.load(best_checkpoint, map_location=device, weights_only=True))
+        scaler = scaler_selection
+        _, weights = make_training_criterion(train.labels, train_idx, "none")
+        refit_losses = []
+    else:
+        del model, optimizer, train_loader, val_loader, scaler_selection
+        gc.collect()
+        torch.cuda.empty_cache()
+        set_seed(args.seed)
+        all_idx = np.arange(len(train.records))
+        criterion, weights = make_training_criterion(train.labels, all_idx, "none")
+        scaler = MinMaxScaler().fit(train.features)
+        scaled_full = scaler.transform(train.features).astype(np.float32)
+        full_loader = make_loader(train, all_idx, scaled_full, tokenizer, args.batch_size, True, 64, "protbert_spaced")
+        model = build_model(args, feature_dim=27, device=device)
+        optimizer = build_optimizer(args, model)
+        refit_losses = []
+        for epoch in range(1, selected["epoch"] + 1):
+            loss = train_one_epoch(model, full_loader, optimizer, criterion, device)
+            refit_losses.append(loss)
+            print(f"{args.architecture} seed={args.seed} full refit epoch={epoch}/{selected['epoch']} loss={loss:.4f}", flush=True)
     torch.save({"model_state_dict": model.state_dict(), "architecture": args.architecture,
                 "seed": args.seed, "selected_epoch": selected["epoch"]}, args.output_dir / "model.pt")
     import joblib
@@ -262,6 +276,7 @@ def main() -> None:
               "model_name": args.model_name, "encoder_layers": args.encoder_layers,
               "optimizer": args.optimizer, "learning_rate": args.learning_rate,
               "batch_size": args.batch_size, "max_epochs": args.epochs,
+              "training_scope": args.training_scope,
               "selected_epoch": int(selected["epoch"]),
               "validation_at_selection": selected, "refit_training": weights,
               "refit_epochs": len(refit_losses), "external_metrics": metrics,

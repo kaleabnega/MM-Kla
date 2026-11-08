@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import random
+import subprocess
 import sys
 import time
 from contextlib import nullcontext
@@ -33,6 +34,66 @@ from pcbert_kla_clean.hybridkla_models import (
 )
 from pcbert_kla_clean.pcbert_revised import load_pcbert_revised
 from run_hybridkla_adapted import BRANCHES, RESOURCE_SHA256, evaluate_and_save, partition_labels, sha256
+
+
+def read_original_kladb(args: argparse.Namespace) -> tuple[dict[str, list[dict[str, str]]], dict]:
+    from pcbert_kla_clean.candidate_groups import (
+        _candidate_components, load_homology_clusters, load_window_candidates,
+    )
+    from pcbert_kla_clean.data import load_split
+    from run_original_kladb_external import (
+        FEATURE_SHA, TRAIN_SHA, grouped_validation_indices, load_external,
+    )
+
+    repo = PROJECT.parents[1]
+    train_file = repo / "baselines/PCBert-Kla-original/data/train.csv"
+    feature_file = train_file.with_name("feature_train.csv")
+    if sha256(train_file) != TRAIN_SHA or sha256(feature_file) != FEATURE_SHA:
+        raise ValueError("Original PCBert-Kla training source changed")
+    train = load_split(train_file, feature_file)
+    external, manifest = load_external(args.original_external_csv, args.original_external_manifest)
+    if len(train.records) != 3487 or int(train.labels.sum()) != 1720:
+        raise ValueError("Original training counts changed")
+    if set(train.sequences) & set(external.sequences):
+        raise ValueError("Original training and KlaDB external windows overlap")
+    mapping = repo / "experiment-1/structure_aware_kla/results/botrytis_b0510_window_mapping/all_window_matches.csv"
+    clusters = PROJECT / "review_data/homology_clusters_mmseqs2.csv"
+    train_idx, val_idx, validation = grouped_validation_indices(train, mapping, clusters, args.seed)
+    groups, _ = _candidate_components(
+        list(dict.fromkeys(train.sequences)),
+        load_window_candidates(mapping), load_homology_clusters(clusters),
+    )
+
+    def original_row(index: int) -> dict[str, str]:
+        record = train.records[index]
+        return {"window_51aa": record.sequence, "label": str(record.label),
+                "group_id": groups[record.sequence], "source_site_id": record.name}
+
+    partitions = {"train": [original_row(int(index)) for index in train_idx],
+                  "validation": [original_row(int(index)) for index in val_idx],
+                  "internal_test": [],
+                  "external_test": [
+                      {"window_51aa": record.sequence, "label": str(record.label),
+                       "group_id": record.name.split(":", 1)[0], "source_site_id": record.name}
+                      for record in external.records
+                  ]}
+    if len(partitions["external_test"]) != 5095 or len(partitions["train"]) != validation["training_rows"]:
+        raise ValueError("HybridKla original/external partition count mismatch")
+    audit = {
+        "benchmark_status": "Original PCBert-Kla training source with candidate-group validation; KlaDB held-out study",
+        "original_train_sha256": TRAIN_SHA,
+        "original_features_sha256": FEATURE_SHA,
+        "candidate_mapping_sha256": sha256(mapping),
+        "homology_clusters_sha256": sha256(clusters),
+        "external_csv_sha256": manifest["sha256"],
+        "training_rows": len(partitions["train"]),
+        "validation_unique_windows": len(partitions["validation"]),
+        "training_indices_sha256": validation["training_indices_sha256"],
+        "validation_indices_sha256": validation["validation_indices_sha256"],
+        "external_rows": len(partitions["external_test"]),
+        "training_scope": "grouped training subset; no full-data refit",
+    }
+    return partitions, audit
 
 
 class TrainableEsmBranch(nn.Module):
@@ -271,7 +332,10 @@ def run(args: argparse.Namespace) -> dict:
     for name, expected in RESOURCE_SHA256.items():
         if sha256(args.resource_dir / name) != expected:
             raise ValueError(f"Official HybridKla resource changed: {name}")
-    partitions, audit = read_lock(args.benchmark_lock)
+    if args.original_external_csv is not None:
+        partitions, audit = read_original_kladb(args)
+    else:
+        partitions, audit = read_lock(args.benchmark_lock)
     train_rows, validation_rows = partitions["train"], partitions["validation"]
     if args.pilot:
         print("One-fold ESM2 timing pilot; internal test is not scored.", flush=True)
@@ -413,11 +477,17 @@ def run(args: argparse.Namespace) -> dict:
             print(f"HybridKla architecture {test_name}:", json.dumps(test_metrics[test_name]), flush=True)
     report = {
         "method": "HybridKla architecture-aligned retraining; grouped protocol, not exact authors' CV",
+        "git_commit": subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=PROJECT.parents[1], text=True).strip(),
         "mode": "one-fold-training-only-timing" if args.pilot else "locked-test-evaluation",
         "benchmark_status": audit.get("benchmark_status", audit.get("protocol")),
-        "benchmark_manifest_sha256": (audit["output_sha256"]["model_manifest.csv"]
+        "benchmark_manifest_sha256": (None if args.original_external_csv is not None
+                                      else audit["output_sha256"]["model_manifest.csv"]
                                       if "output_sha256" in audit else audit["model_manifest_sha256"]),
-        "benchmark_lock_sha256": sha256(args.benchmark_lock),
+        "benchmark_lock_sha256": (sha256(args.original_external_manifest)
+                                  if args.original_external_csv is not None
+                                  else sha256(args.benchmark_lock)),
+        "benchmark_input_audit": audit if args.original_external_csv is not None else None,
         "model_name": args.esm_model, "model_revision": revision,
         "seed": args.seed, "folds": 5, "threshold": 0.5,
         "selection_metric": "validation AUPRC",
@@ -440,7 +510,9 @@ def run(args: argparse.Namespace) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--benchmark-lock", type=Path, required=True)
+    parser.add_argument("--benchmark-lock", type=Path)
+    parser.add_argument("--original-external-csv", type=Path)
+    parser.add_argument("--original-external-manifest", type=Path)
     parser.add_argument("--resource-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--device", default="cuda:0")
@@ -456,6 +528,12 @@ def main() -> None:
     parser.add_argument("--patience", type=int, default=6)
     parser.add_argument("--pilot", action="store_true")
     args = parser.parse_args()
+    if (args.benchmark_lock is None) == (args.original_external_csv is None):
+        parser.error("Select exactly one of --benchmark-lock or --original-external-csv")
+    if args.original_external_csv is not None and args.original_external_manifest is None:
+        parser.error("--original-external-manifest is required with --original-external-csv")
+    if args.original_external_csv is None and args.original_external_manifest is not None:
+        parser.error("--original-external-manifest requires --original-external-csv")
     print(json.dumps(run(args), indent=2, sort_keys=True))
 
 
