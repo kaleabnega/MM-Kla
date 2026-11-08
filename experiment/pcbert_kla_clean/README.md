@@ -91,6 +91,34 @@ working directories, so keep each version's output for later aggregation.
 If the official archive is attached to Kaggle rather than downloaded, set
 `LOCAL_HYBRIDKLA_ARCHIVE` to its path.
 
+### Original-training to external-study experiment
+
+The [Kaggle original-training/external-study notebook](kaggle_original_train_kladb_external.ipynb)
+trains PCBert-Kla and MM-Kla on the released, unrevised 3,487-row training
+file, then evaluates both on the locked KlaDB human study holdout. The
+original training file is cloned with the private repository; **only the
+external-study export needs a Kaggle dataset upload**. Generate the two files
+locally with:
+
+```bash
+python experiment/pcbert_kla_clean/scripts/export_kladb_external.py
+```
+
+Create a **private** Kaggle dataset from both files in
+`experiment/pcbert_kla_clean/outputs/kladb_external_upload/`:
+`kladb_human_external_test.csv` and `external_test_manifest.json`. These files
+are ignored by Git. In Kaggle, attach that dataset, enable Internet and two
+T4 GPUs, and provide a `GITHUB_TOKEN` Kaggle Secret with read access to this
+repository. Run the notebook preflight, then set `RUN_TRAINING = True` and
+select the desired `RUN_SEEDS` (predeclared: 42, 123, 777). Each architecture
+uses one GPU. A candidate-homology-grouped validation subset of the original
+training file selects the epoch; a fresh model is then refit on **all 3,487
+rows**. The external study is scored once after refitting. The original
+training duplicates remain, and its candidate parent-protein identities are
+not verified. The independent-study negatives are putative. This same KlaDB
+holdout was examined in earlier project experiments, so it is not a fresh
+blinded confirmatory test.
+
 The original train/test benchmark has exact sequence overlap. Previous metrics
 remain available for historical comparison, but they do not establish
 performance on unseen proteins. The current revision protocol and audit are
