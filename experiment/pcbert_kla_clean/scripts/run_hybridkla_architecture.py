@@ -346,8 +346,9 @@ def read_lock(lock_path: Path) -> tuple[dict[str, list[dict[str, str]]], dict]:
         return partitions, audit
 
     manifest = lock_path.with_name("model_manifest.csv")
-    study_lock = "output_sha256" in audit
-    expected_sha = (audit["output_sha256"]["model_manifest.csv"] if study_lock
+    human_lock = "holdout_pmid" in audit and "sampled_training_rows" in audit
+    study_lock = "output_sha256" in audit and not human_lock
+    expected_sha = (audit["output_sha256"]["model_manifest.csv"] if study_lock or human_lock
                     else audit["model_manifest_sha256"])
     if sha256(manifest) != expected_sha:
         raise ValueError("HybridKla source manifest does not match lock")
@@ -360,7 +361,20 @@ def read_lock(lock_path: Path) -> tuple[dict[str, list[dict[str, str]]], dict]:
         partition = row["partition"]
         if partition not in partitions:
             raise ValueError("Invalid source partition")
-        if study_lock:
+        if human_lock:
+            row["group_id"] = row["homology_group"]
+            row["source_site_id"] = f'{row["accession"]}:{row["position_1based"]}'
+            identifier = row["accession"]
+            if len(row["window_51aa"]) != 51 or row["window_51aa"][25] != "K":
+                raise ValueError("Invalid human lysine-centered window")
+            if row["label"] not in {"0", "1"}:
+                raise ValueError("Invalid human label")
+            if partition == "external_test":
+                if row["label"] == "1" and row["source_pmids"] != audit["holdout_pmid"]:
+                    raise ValueError("External positive lacks exclusive held-out-study evidence")
+            elif audit["holdout_pmid"] in row["source_pmids"].split(";"):
+                raise ValueError("Held-out-study evidence leaked into human development")
+        elif study_lock:
             expected = ("S7", "Mus musculus") if partition == "external_test" else (
                 "S1", "Homo sapiens")
             if (row["source_table"], row["species"]) != expected:
@@ -381,10 +395,13 @@ def read_lock(lock_path: Path) -> tuple[dict[str, list[dict[str, str]]], dict]:
         windows.add(row["window_51aa"])
         partitions[partition].append(row)
     for name, group_rows in partitions.items():
-        if name == "external_test" and not study_lock:
+        if name == "external_test" and not study_lock and not human_lock:
             continue
-        expected = (audit["partitions_before_training_resampling"][name] if study_lock
-                    else audit["partitions"][name])
+        expected = (audit["partitions_before_training_resampling"][name]
+                    if study_lock or human_lock else audit["partitions"][name])
+        if human_lock and name == "train":
+            expected = {"rows": audit["sampled_training_rows"],
+                        "positives": audit["partitions_before_training_resampling"][name]["positives"]}
         if ((name != "train" or not study_lock) and
             (len(group_rows) != expected["rows"] or
              sum(r["label"] == "1" for r in group_rows) != expected["positives"])):
@@ -422,6 +439,8 @@ def run(args: argparse.Namespace) -> dict:
     train_rows, validation_rows = partitions["train"], partitions["validation"]
     if args.pilot:
         print("One-fold ESM2 timing pilot; internal test is not scored.", flush=True)
+    elif args.development_only:
+        print("Full architecture-aligned training; validation only, no test inference.", flush=True)
     else:
         print("Full architecture-aligned training; internal test is scored only after selection.", flush=True)
     from huggingface_hub import HfApi
@@ -441,6 +460,7 @@ def run(args: argparse.Namespace) -> dict:
     val_labels = np.asarray([int(row["label"]) for row in validation_rows])
     fold_reports = {}
     refit_reports = None
+    validation_metrics = {}
     if args.pilot:
         holdout = set(folds[0])
         base_rows = [train_rows[index] for index in sorted(all_indices - holdout)]
@@ -523,6 +543,15 @@ def run(args: argparse.Namespace) -> dict:
                    checkpoint_dir / "META.pth")
         fold_reports["META"] = {"selected_epoch": meta_result.selected_epoch,
                                 "validation_auprc": meta_result.validation_auprc}
+        if args.development_only:
+            validation_scores = predict_scores(meta_result.model, val_scores, device)
+            score_rows = [{"Site_ID": row["source_site_id"], "Label": row["label"]}
+                          for row in validation_rows]
+            validation_metrics = evaluate_and_save(
+                "validation", score_rows, validation_scores, output
+            )
+            print("HybridKla architecture validation:",
+                  json.dumps(validation_metrics), flush=True)
         if args.full_refit:
             full_rows = partitions["full_train"]
             if len(full_rows) != 3487 or sum(row["label"] == "1" for row in full_rows) != 1720:
@@ -537,7 +566,7 @@ def run(args: argparse.Namespace) -> dict:
             audit["training_scope"] = "full original training rows; grouped OOF stacking"
             audit["refit_training_rows"] = len(train_rows)
         test_metrics = {}
-        for test_name in ("internal_test", "external_test"):
+        for test_name in (() if args.development_only else ("internal_test", "external_test")):
             test_rows = partitions[test_name]
             if not test_rows:
                 continue
@@ -576,7 +605,8 @@ def run(args: argparse.Namespace) -> dict:
         "method": "HybridKla architecture-aligned retraining; grouped protocol, not exact authors' CV",
         "git_commit": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=PROJECT.parents[1], text=True).strip(),
-        "mode": "one-fold-training-only-timing" if args.pilot else "locked-test-evaluation",
+        "mode": ("one-fold-training-only-timing" if args.pilot else
+                 "development-only" if args.development_only else "locked-test-evaluation"),
         "benchmark_status": audit.get("benchmark_status", audit.get("protocol")),
         "benchmark_manifest_sha256": (None if args.original_external_csv is not None
                                       else audit["output_sha256"]["model_manifest.csv"]
@@ -599,6 +629,7 @@ def run(args: argparse.Namespace) -> dict:
                             "patience": args.patience},
         "fold_reports": fold_reports,
         "full_refit_fold_reports": refit_reports,
+        "validation_metrics": validation_metrics,
         "test_metrics": test_metrics,
         "wall_seconds": round(time.monotonic() - started, 1),
     }
@@ -625,6 +656,7 @@ def main() -> None:
     parser.add_argument("--feature-batch-size", type=int, default=2048)
     parser.add_argument("--patience", type=int, default=6)
     parser.add_argument("--pilot", action="store_true")
+    parser.add_argument("--development-only", action="store_true")
     parser.add_argument("--full-refit", action="store_true")
     args = parser.parse_args()
     if (args.benchmark_lock is None) == (args.original_external_csv is None):
@@ -635,6 +667,8 @@ def main() -> None:
         parser.error("--original-external-manifest requires --original-external-csv")
     if args.full_refit and (args.original_external_csv is None or args.pilot):
         parser.error("--full-refit requires original external mode without --pilot")
+    if args.development_only and (args.pilot or args.full_refit):
+        parser.error("--development-only cannot be combined with --pilot or --full-refit")
     print(json.dumps(run(args), indent=2, sort_keys=True))
 
 

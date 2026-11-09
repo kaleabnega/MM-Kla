@@ -43,6 +43,19 @@ seeds are available. Duplicate seeds and mismatched code commits or settings
 are rejected. The notebook output includes `final_seed_<seed>.json`, raw
 predictions, model checkpoints, logs, and the combined summary after seed 777.
 
+The [three-model KlaDB development notebook](kaggle_human_adamw_three_models.ipynb)
+compares PCBert-Kla, MM-Kla, and architecture-aligned HybridKla on the same
+locked human training and validation partitions without test inference. The two
+ProtBert models use matched AdamW settings; HybridKla retains its own
+eight-branch training procedure. Attach the uncapped `split_audit.json` and
+`model_manifest.csv` as one private Kaggle dataset, enable Internet and 2 x T4,
+and provide `GITHUB_TOKEN` as a Kaggle Secret. Set `RUN_MODE = 'pilot'` to time
+one HybridKla ESM2 fold, then `RUN_MODE = 'development'` for one seed. Save
+separate versions for seeds 42, 123, and 777; the notebook writes a per-seed
+summary JSON and combines compatible summaries attached as Kaggle inputs.
+The official HybridKla archive is fetched and checksum-checked, or supplied via
+`LOCAL_HYBRIDKLA_ARCHIVE`. No raw KlaDB CSV upload is required for this notebook.
+
 The [HybridKla-source Kaggle notebook](kaggle_hybridkla_source.ipynb) is a
 **second, provisional internal benchmark** from the official HybridKla
 workbook. It locks accession-grouped train/validation/internal-test partitions
