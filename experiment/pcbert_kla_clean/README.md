@@ -50,9 +50,10 @@ ProtBert models use matched AdamW settings; HybridKla retains its own
 eight-branch training procedure. Attach the uncapped `split_audit.json` and
 `model_manifest.csv` as one private Kaggle dataset, enable Internet and 2 x T4,
 and provide `GITHUB_TOKEN` as a Kaggle Secret. Set `RUN_MODE = 'pilot'` to time
-one HybridKla ESM2 fold, then `RUN_MODE = 'development'` for one seed. Save
-separate versions for seeds 42, 123, and 777; the notebook writes a per-seed
-summary JSON and combines compatible summaries attached as Kaggle inputs.
+one HybridKla ESM2 fold, then `RUN_MODE = 'development'` to run all three models
+for seeds 42, 123, and 777 in one saved version. The notebook writes per-seed
+summaries, a nine-row validation table, paired differences, and a compact
+diagnostics ZIP. Full execution may exceed a Kaggle session or weekly GPU quota.
 The official HybridKla archive is fetched and checksum-checked, or supplied via
 `LOCAL_HYBRIDKLA_ARCHIVE`. No raw KlaDB CSV upload is required for this notebook.
 

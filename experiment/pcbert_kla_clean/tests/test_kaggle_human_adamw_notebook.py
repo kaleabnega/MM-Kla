@@ -1,10 +1,13 @@
 import contextlib
 import io
 import json
-import shutil
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 
 class KaggleHumanAdamwNotebookTests(unittest.TestCase):
@@ -28,6 +31,8 @@ class KaggleHumanAdamwNotebookTests(unittest.TestCase):
             sources.append(source)
         self.assertIn("RUN_MODE = 'check'", sources[0])
         self.assertIn("DECLARED_SEEDS = (42, 123, 777)", sources[0])
+        self.assertIn("RUN_SEEDS = DECLARED_SEEDS", sources[0])
+        self.assertIn("for seed in RUN_SEEDS:", sources[4])
         self.assertIn("human-study-development", "\n".join(sources))
         self.assertIn("--development-only", "\n".join(sources))
         self.assertNotIn("--run', 'human-study'", "\n".join(sources))
@@ -40,7 +45,7 @@ class KaggleHumanAdamwNotebookTests(unittest.TestCase):
         metrics = {key: 0.2 for key in
                    ("AUPRC", "AUC", "MCC", "F1", "Pre", "Rec", "SP", "ACC")}
 
-        def make_seed(root, inputs, seed):
+        def make_seed(root, seed):
             seed_dir = root / f"seed_{seed}"
             for architecture in ("baseline", "token_gated"):
                 run_dir = seed_dir / architecture / "human_study" / "runs" / "run123"
@@ -75,37 +80,64 @@ class KaggleHumanAdamwNotebookTests(unittest.TestCase):
                       "validation_metrics": metrics,
                       "fold_reports": {"META": {"selected_epoch": 4}}}
             (hybrid_dir / "run_report.json").write_text(json.dumps(hybrid))
-            namespace = {"RUN_MODE": "development", "SEED": seed,
-                         "SEED_DIR": seed_dir, "OUTPUT": root,
-                         "INPUT": inputs, "COMMIT": "unchanged-code",
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for seed in (42, 123, 777):
+                make_seed(root, seed)
+            namespace = {"RUN_MODE": "development", "RUN_SEEDS": (42, 123, 777),
+                         "OUTPUT": root, "COMMIT": "unchanged-code",
                          "AUDIT_SHA": "audit", "MANIFEST_SHA": "manifest",
                          "DECLARED_SEEDS": (42, 123, 777), "json": json}
             with contextlib.redirect_stdout(io.StringIO()):
                 exec(summary, namespace)
-            return namespace
+            table = pd.read_csv(root / "validation_results.csv")
+            self.assertEqual(len(table), 9)
+            self.assertEqual(set(table["seed"]), {42, 123, 777})
+            self.assertEqual(set(table["architecture"]),
+                             {"baseline", "token_gated", "hybridkla_architecture_aligned"})
+            self.assertEqual(len(pd.read_csv(root / "validation_paired_auprc.csv")), 3)
+            self.assertEqual(len(pd.read_csv(root / "validation_mean_std.csv", header=[0, 1],
+                                             index_col=0)), 3)
+            for seed in (42, 123, 777):
+                self.assertTrue((root / f"seed_{seed}_summary.json").is_file())
+
+            (root / "seed_777" / "hybridkla_architecture_aligned" / "run_report.json").unlink()
+            with self.assertRaises(FileNotFoundError):
+                exec(summary, namespace)
+
+    def test_development_launches_all_nine_validation_only_runs(self):
+        _, notebook = self.notebook()
+        source = "".join(notebook["cells"][10]["source"])
+        commands = []
+
+        class CompletedProcess:
+            returncode = 0
+
+            def poll(self):
+                return 0
+
+        def launch(command, **kwargs):
+            commands.append(command)
+            return CompletedProcess()
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            first, second, third = (root / name for name in ("first", "second", "third"))
-            for directory in (first, second, third):
-                directory.mkdir()
-            first_input = root / "first_input"
-            second_input = root / "second_input"
-            third_input = root / "third_input"
-            for directory in (first_input, second_input, third_input):
-                directory.mkdir()
-            make_seed(first, first_input, 42)
-            self.assertEqual(len(pd.read_csv(first / "validation_results.csv")), 3)
-            shutil.copy(first / "seed_42_summary.json", second_input)
-            make_seed(second, second_input, 123)
-            self.assertEqual(len(pd.read_csv(second / "validation_results.csv")), 6)
-            shutil.copy(first / "seed_42_summary.json", third_input)
-            shutil.copy(second / "seed_123_summary.json", third_input)
-            make_seed(third, third_input, 777)
-            table = pd.read_csv(third / "validation_results.csv")
-            self.assertEqual(len(table), 9)
-            self.assertEqual(set(table["architecture"]),
-                             {"baseline", "token_gated", "hybridkla_architecture_aligned"})
+            namespace = {
+                "RUN_MODE": "development", "RUN_SEEDS": (42, 123, 777),
+                "OUTPUT": root, "PROJECT": root, "LOCK": root / "split_audit.json",
+                "RESOURCE_DIR": root / "resources", "sys": sys, "time": time,
+                "subprocess": SimpleNamespace(Popen=launch, STDOUT=subprocess.STDOUT),
+            }
+            with contextlib.redirect_stdout(io.StringIO()):
+                exec(source, namespace)
+        self.assertEqual(len(commands), 9)
+        for seed in (42, 123, 777):
+            selected = [command for command in commands
+                        if command[command.index("--seed") + 1] == str(seed)]
+            self.assertEqual(len(selected), 3)
+            self.assertEqual(sum("human-study-development" in command for command in selected), 2)
+            self.assertEqual(sum("--development-only" in command for command in selected), 1)
+            self.assertTrue(all("human-study" not in command for command in selected))
 
 
 if __name__ == "__main__":
