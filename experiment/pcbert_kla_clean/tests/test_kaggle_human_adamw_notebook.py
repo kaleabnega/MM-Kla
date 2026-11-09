@@ -1,4 +1,5 @@
 import contextlib
+import importlib.util
 import io
 import json
 import subprocess
@@ -31,13 +32,14 @@ class KaggleHumanAdamwNotebookTests(unittest.TestCase):
             sources.append(source)
         self.assertIn("RUN_MODE = 'check'", sources[0])
         self.assertIn("DECLARED_SEEDS = (42, 123, 777)", sources[0])
-        self.assertIn("RUN_SEEDS = DECLARED_SEEDS", sources[0])
-        self.assertIn("for seed in RUN_SEEDS:", sources[4])
+        self.assertIn("RUN_SEED = 42", sources[0])
+        self.assertIn("RUN_SEED not in DECLARED_SEEDS", sources[0])
+        self.assertIn("run_seed(RUN_SEED)", sources[4])
         self.assertIn("human-study-development", "\n".join(sources))
         self.assertIn("--development-only", "\n".join(sources))
         self.assertNotIn("--run', 'human-study'", "\n".join(sources))
 
-    def test_summary_uses_three_validation_results_and_combines_seeds(self):
+    def test_summary_uses_three_validation_results_for_selected_seed(self):
         import pandas as pd
 
         _, notebook = self.notebook()
@@ -82,30 +84,27 @@ class KaggleHumanAdamwNotebookTests(unittest.TestCase):
             (hybrid_dir / "run_report.json").write_text(json.dumps(hybrid))
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            for seed in (42, 123, 777):
-                make_seed(root, seed)
-            namespace = {"RUN_MODE": "development", "RUN_SEEDS": (42, 123, 777),
+            make_seed(root, 42)
+            namespace = {"RUN_MODE": "development", "RUN_SEED": 42,
                          "OUTPUT": root, "COMMIT": "unchanged-code",
                          "AUDIT_SHA": "audit", "MANIFEST_SHA": "manifest",
                          "DECLARED_SEEDS": (42, 123, 777), "json": json}
             with contextlib.redirect_stdout(io.StringIO()):
                 exec(summary, namespace)
             table = pd.read_csv(root / "validation_results.csv")
-            self.assertEqual(len(table), 9)
-            self.assertEqual(set(table["seed"]), {42, 123, 777})
+            self.assertEqual(len(table), 3)
+            self.assertEqual(set(table["seed"]), {42})
             self.assertEqual(set(table["architecture"]),
                              {"baseline", "token_gated", "hybridkla_architecture_aligned"})
-            self.assertEqual(len(pd.read_csv(root / "validation_paired_auprc.csv")), 3)
-            self.assertEqual(len(pd.read_csv(root / "validation_mean_std.csv", header=[0, 1],
-                                             index_col=0)), 3)
-            for seed in (42, 123, 777):
-                self.assertTrue((root / f"seed_{seed}_summary.json").is_file())
+            self.assertEqual(len(pd.read_csv(root / "validation_paired_auprc.csv")), 1)
+            self.assertFalse((root / "validation_mean_std.csv").exists())
+            self.assertTrue((root / "seed_42_summary.json").is_file())
 
-            (root / "seed_777" / "hybridkla_architecture_aligned" / "run_report.json").unlink()
+            (root / "seed_42" / "hybridkla_architecture_aligned" / "run_report.json").unlink()
             with self.assertRaises(FileNotFoundError):
                 exec(summary, namespace)
 
-    def test_development_launches_all_nine_validation_only_runs(self):
+    def test_development_launches_three_validation_only_runs(self):
         _, notebook = self.notebook()
         source = "".join(notebook["cells"][10]["source"])
         commands = []
@@ -123,21 +122,51 @@ class KaggleHumanAdamwNotebookTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             namespace = {
-                "RUN_MODE": "development", "RUN_SEEDS": (42, 123, 777),
+                "RUN_MODE": "development", "RUN_SEED": 42,
                 "OUTPUT": root, "PROJECT": root, "LOCK": root / "split_audit.json",
                 "RESOURCE_DIR": root / "resources", "sys": sys, "time": time,
                 "subprocess": SimpleNamespace(Popen=launch, STDOUT=subprocess.STDOUT),
             }
             with contextlib.redirect_stdout(io.StringIO()):
                 exec(source, namespace)
-        self.assertEqual(len(commands), 9)
-        for seed in (42, 123, 777):
-            selected = [command for command in commands
-                        if command[command.index("--seed") + 1] == str(seed)]
-            self.assertEqual(len(selected), 3)
-            self.assertEqual(sum("human-study-development" in command for command in selected), 2)
-            self.assertEqual(sum("--development-only" in command for command in selected), 1)
-            self.assertTrue(all("human-study" not in command for command in selected))
+        self.assertEqual(len(commands), 3)
+        self.assertTrue(all(command[command.index("--seed") + 1] == "42" for command in commands))
+        self.assertEqual(sum("human-study-development" in command for command in commands), 2)
+        self.assertEqual(sum("--development-only" in command for command in commands), 1)
+        self.assertTrue(all("human-study" not in command for command in commands))
+
+    def test_aggregation_rejects_mismatched_bundles(self):
+        script = Path(__file__).resolve().parents[1] / "scripts/aggregate_human_adamw_seeds.py"
+        spec = importlib.util.spec_from_file_location("aggregate_human_adamw_seeds", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        metrics = {key: 0.2 for key in module.METRICS}
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = []
+            for seed in (42, 123, 777):
+                records = [{"seed": seed, "architecture": architecture,
+                            "selected_epoch": 2, **metrics}
+                           for architecture in sorted(module.ARCHITECTURES)]
+                bundle = {"schema_version": 1, "seed": seed,
+                          "git_commit": "same-code", "audit_sha256": "audit",
+                          "manifest_sha256": "manifest", "settings": {"lr": 2e-5},
+                          "records": records}
+                path = root / f"seed_{seed}_summary.json"
+                path.write_text(json.dumps(bundle))
+                paths.append(path)
+            rows, paired, summary = module.aggregate(paths)
+            self.assertEqual(len(rows), 9)
+            self.assertEqual(len(paired), 3)
+            self.assertEqual(len(summary), 3)
+            with self.assertRaisesRegex(ValueError, "exactly 3"):
+                module.aggregate(paths[:2])
+            changed = json.loads(paths[2].read_text())
+            changed["git_commit"] = "different-code"
+            paths[2].write_text(json.dumps(changed))
+            with self.assertRaisesRegex(ValueError, "git_commit"):
+                module.aggregate(paths)
 
 
 if __name__ == "__main__":
