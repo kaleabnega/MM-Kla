@@ -14,6 +14,7 @@ from pcbert_kla_clean.model import (
     HybridTokenGatedPCBertKla,
     PCBertKla,
     TokenGatedPCBertKla,
+    TokenGatedRevisedPCBertKla,
 )
 
 
@@ -141,6 +142,20 @@ def build_model(args: Namespace, feature_dim: int, device: torch.device) -> nn.M
             site_token_index=args.site_token_index,
             freeze_encoder=args.freeze_encoder,
             ablation=args.ablation,
+            cache_dir=args.cache_dir,
+        )
+    elif args.architecture == "token_gated_revised":
+        if args.ablation != "none":
+            raise ValueError("The revised model does not support --ablation")
+        model = TokenGatedRevisedPCBertKla(
+            model_name=args.model_name,
+            feature_dim=feature_dim,
+            encoder_layers=args.encoder_layers,
+            fusion_dim=args.fusion_dim,
+            attention_dim=args.attention_dim,
+            dropout=args.arch_dropout,
+            site_token_index=args.site_token_index,
+            freeze_encoder=args.freeze_encoder,
             cache_dir=args.cache_dir,
         )
     elif args.architecture == "hybrid_gated":

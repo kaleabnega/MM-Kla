@@ -168,6 +168,32 @@ class KaggleHumanAdamwNotebookTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "git_commit"):
                 module.aggregate(paths)
 
+    def test_aggregation_accepts_revised_architecture_only_when_selected(self):
+        script = Path(__file__).resolve().parents[1] / "scripts/aggregate_human_adamw_seeds.py"
+        spec = importlib.util.spec_from_file_location("aggregate_human_adamw_seeds", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temporary:
+            paths = []
+            for seed in (42, 123, 777):
+                records = [
+                    {"seed": seed, "architecture": architecture, "selected_epoch": 2,
+                     **{metric: 0.2 for metric in module.METRICS}}
+                    for architecture in ("baseline", "token_gated_revised", "hybridkla_architecture_aligned")
+                ]
+                bundle = {"schema_version": 1, "seed": seed, "git_commit": "same-code",
+                          "audit_sha256": "audit", "manifest_sha256": "manifest",
+                          "settings": {"mm_kla_architecture": "token_gated_revised"},
+                          "records": records}
+                path = Path(temporary) / f"seed_{seed}_summary.json"
+                path.write_text(json.dumps(bundle))
+                paths.append(path)
+            rows, paired, _ = module.aggregate(paths, model_architecture="token_gated_revised")
+            self.assertEqual(len(rows), 9)
+            self.assertEqual(len(paired), 3)
+            with self.assertRaisesRegex(ValueError, "architectures"):
+                module.aggregate(paths)
+
 
 if __name__ == "__main__":
     unittest.main()

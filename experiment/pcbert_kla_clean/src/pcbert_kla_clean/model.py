@@ -226,6 +226,13 @@ class TokenGatedPCBertKla(nn.Module):
             nn.Linear(fusion_dim // 2, 1),
         )
 
+    def sequence_context(
+        self,
+        token_embeddings: torch.Tensor,
+        attention_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        return self.site_attention(token_embeddings, attention_mask)
+
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -248,7 +255,7 @@ class TokenGatedPCBertKla(nn.Module):
                 self.freeze_encoder,
             )
             token_embeddings = outputs.last_hidden_state.to(features.dtype)
-            sequence_embedding = self.site_attention(token_embeddings, attention_mask)
+            sequence_embedding = self.sequence_context(token_embeddings, attention_mask)
             sequence_embedding = self.sequence_projection(sequence_embedding)
 
         if self.uses_features:
@@ -274,6 +281,65 @@ class TokenGatedPCBertKla(nn.Module):
             raise ValueError(f"Unsupported token-gated ablation mode: {self.ablation}")
 
         return torch.sigmoid(self.classifier(fused)).squeeze(-1)
+
+
+class TokenGatedRevisedPCBertKla(TokenGatedPCBertKla):
+    """Token-gated model with a K-centered, multi-scale convolutional branch."""
+
+    def __init__(
+        self,
+        model_name: str = "Rostlab/prot_bert",
+        feature_dim: int = 27,
+        encoder_layers: int = 4,
+        fusion_dim: int = 256,
+        attention_dim: int = 256,
+        dropout: float = 0.2,
+        site_token_index: int = 26,
+        freeze_encoder: bool = False,
+        cache_dir: str | None = None,
+    ) -> None:
+        super().__init__(
+            model_name=model_name,
+            feature_dim=feature_dim,
+            encoder_layers=encoder_layers,
+            fusion_dim=fusion_dim,
+            attention_dim=attention_dim,
+            dropout=dropout,
+            site_token_index=site_token_index,
+            freeze_encoder=freeze_encoder,
+            ablation="none",
+            cache_dir=cache_dir,
+        )
+        hidden_size = encoder_hidden_size(self.encoder)
+        local_channels = 64
+        self.local_filters = nn.ModuleList(
+            nn.Sequential(
+                nn.Conv1d(
+                    hidden_size, hidden_size, kernel_size=width,
+                    padding=width // 2, groups=hidden_size,
+                ),
+                nn.Conv1d(hidden_size, local_channels, kernel_size=1),
+                nn.GELU(),
+            )
+            for width in (3, 5, 9)
+        )
+        self.sequence_projection = nn.Sequential(
+            nn.LayerNorm(hidden_size + 3 * local_channels),
+            nn.Linear(hidden_size + 3 * local_channels, fusion_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+        )
+
+    def sequence_context(
+        self,
+        token_embeddings: torch.Tensor,
+        attention_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        pooled = super().sequence_context(token_embeddings, attention_mask)
+        site_index = min(self.site_attention.site_token_index, token_embeddings.shape[1] - 1)
+        channels_first = token_embeddings.transpose(1, 2)
+        local = [layer(channels_first)[:, :, site_index] for layer in self.local_filters]
+        return torch.cat((pooled, *local), dim=1)
 
 
 class HybridTokenGatedPCBertKla(nn.Module):

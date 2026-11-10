@@ -13,7 +13,10 @@ ARCHITECTURES = {"baseline", "token_gated", "hybridkla_architecture_aligned"}
 METRICS = ("AUPRC", "AUC", "MCC", "F1", "Pre", "Rec", "SP", "ACC")
 
 
-def aggregate(paths):
+def aggregate(paths, model_architecture="token_gated"):
+    if model_architecture not in {"token_gated", "token_gated_revised"}:
+        raise ValueError("Unsupported MM-Kla architecture")
+    architectures = {"baseline", model_architecture, "hybridkla_architecture_aligned"}
     if len(paths) != len(SEEDS):
         raise ValueError(f"Expected exactly {len(SEEDS)} seed bundles")
     bundles = [json.loads(Path(path).read_text()) for path in paths]
@@ -28,9 +31,9 @@ def aggregate(paths):
             if not bundle.get(key) or bundle[key] != reference.get(key):
                 raise ValueError(f"Seed bundles have missing or inconsistent {key}")
         records = bundle.get("records")
-        if not isinstance(records, list) or len(records) != len(ARCHITECTURES):
+        if not isinstance(records, list) or len(records) != len(architectures):
             raise ValueError(f"Seed {bundle['seed']} needs three model records")
-        if {record.get("architecture") for record in records} != ARCHITECTURES:
+        if {record.get("architecture") for record in records} != architectures:
             raise ValueError(f"Seed {bundle['seed']} has missing or duplicate architectures")
         for record in records:
             if record.get("seed") != bundle["seed"]:
@@ -51,8 +54,8 @@ def aggregate(paths):
     rows = pd.DataFrame(record for bundle in bundles for record in bundle["records"])
     rows = rows.sort_values(["seed", "architecture"]).reset_index(drop=True)
     paired = rows.pivot(index="seed", columns="architecture", values="AUPRC")
-    paired["MM-Kla minus PCBert-Kla"] = paired["token_gated"] - paired["baseline"]
-    paired["MM-Kla minus HybridKla-aligned"] = paired["token_gated"] - paired["hybridkla_architecture_aligned"]
+    paired["MM-Kla minus PCBert-Kla"] = paired[model_architecture] - paired["baseline"]
+    paired["MM-Kla minus HybridKla-aligned"] = paired[model_architecture] - paired["hybridkla_architecture_aligned"]
     summary = rows.groupby("architecture")[list(METRICS)].agg(["mean", "std"])
     return rows, paired, summary
 
@@ -61,8 +64,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundles", nargs=3, required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--model-architecture", choices=["token_gated", "token_gated_revised"], default="token_gated")
     args = parser.parse_args()
-    rows, paired, summary = aggregate(args.bundles)
+    rows, paired, summary = aggregate(args.bundles, model_architecture=args.model_architecture)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     rows.to_csv(args.output_dir / "validation_results.csv", index=False)
     paired.to_csv(args.output_dir / "validation_paired_auprc.csv")

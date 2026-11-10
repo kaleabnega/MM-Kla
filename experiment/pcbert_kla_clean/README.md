@@ -51,11 +51,23 @@ eight-branch training procedure. Attach the uncapped `split_audit.json` and
 `model_manifest.csv` as one private Kaggle dataset, enable Internet and 2 x T4,
 and provide `GITHUB_TOKEN` as a Kaggle Secret. Set `RUN_MODE = 'pilot'` to time
 one HybridKla ESM2 fold, then `RUN_MODE = 'development'` to run all three models
-for seeds 42, 123, and 777 in one saved version. The notebook writes per-seed
-summaries, a nine-row validation table, paired differences, and a compact
+for one selected seed per saved version. Repeat for seeds 42, 123, and 777,
+using the same commit. The notebook writes per-seed
+summaries, a three-row validation table, paired differences, and a compact
 diagnostics ZIP. Full execution may exceed a Kaggle session or weekly GPU quota.
 The official HybridKla archive is fetched and checksum-checked, or supplied via
 `LOCAL_HYBRIDKLA_ARCHIVE`. No raw KlaDB CSV upload is required for this notebook.
+
+The [K-centered convolution development notebook](kaggle_human_local_conv_three_models.ipynb)
+compares PCBert-Kla, `token_gated_revised`, and architecture-aligned HybridKla
+on the same locked KlaDB human training and validation partitions. The revised
+model adds 3-, 5-, and 9-residue convolutional filters at the target lysine to
+the original token-gated sequence branch; its feature branch, gated fusion, and
+classifier are unchanged. It uses the same private Kaggle dataset, secret, and
+two-T4 setup described above. `RUN_MODE = 'check'` is the default; run one seed
+at a time with `RUN_MODE = 'development'` and `RUN_SEED` set to 42, 123, or 777.
+No test predictions are generated. Combine the resulting seed summaries with
+`scripts/aggregate_human_adamw_seeds.py --model-architecture token_gated_revised`.
 
 The [HybridKla-source Kaggle notebook](kaggle_hybridkla_source.ipynb) is a
 **second, provisional internal benchmark** from the official HybridKla
