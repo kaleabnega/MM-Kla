@@ -38,7 +38,10 @@ sbatch setup_environment.sbatch
 Wait for it to finish successfully. It creates an isolated Python 3 virtual
 environment at `$HOME/.venvs/mm-kla-hpc`, installs the project requirements and
 PEFT, and records a dependency freeze. The compute node must have package-index
-access for this setup step. `VENV_DIR` can override the location for both jobs.
+access for this setup step. The environment is created using the account's
+Miniconda Python because the system Python on the compute nodes lacks
+`ensurepip`; `PYTHON_FOR_VENV` can override that interpreter. `VENV_DIR` can
+override the environment location for both jobs.
 Because the environment is isolated, Kaggle's incompatible preinstalled
 `torchao` is not inherited.
 

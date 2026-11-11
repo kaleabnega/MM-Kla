@@ -18,13 +18,18 @@ fi
 HPC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${HPC_DIR}/.." && pwd)"
 VENV_DIR="${VENV_DIR:-${HOME}/.venvs/mm-kla-hpc}"
+PYTHON_FOR_VENV="${PYTHON_FOR_VENV:-${HOME}/.miniconda3/bin/python}"
 
 if [[ -e "${VENV_DIR}/.ready" ]]; then
     echo "Environment already prepared: ${VENV_DIR}" >&2
     exit 2
 fi
+if [[ ! -x "${PYTHON_FOR_VENV}" ]]; then
+    echo "Python for environment creation is unavailable: ${PYTHON_FOR_VENV}" >&2
+    exit 2
+fi
 
-python3 -m venv "${VENV_DIR}"
+"${PYTHON_FOR_VENV}" -m venv "${VENV_DIR}"
 "${VENV_DIR}/bin/python" -m pip install --upgrade pip
 "${VENV_DIR}/bin/python" -m pip install -r "${PROJECT_DIR}/requirements.txt" 'peft>=0.11,<1'
 "${VENV_DIR}/bin/python" -m pip freeze > "${VENV_DIR}/requirements.freeze.txt"
