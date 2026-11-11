@@ -14,7 +14,7 @@ METRICS = ("AUPRC", "AUC", "MCC", "F1", "Pre", "Rec", "SP", "ACC")
 
 
 def aggregate(paths, model_architecture="token_gated"):
-    if model_architecture not in {"token_gated", "token_gated_revised"}:
+    if model_architecture not in {"token_gated", "token_gated_revised", "token_gated_conv_concat"}:
         raise ValueError("Unsupported MM-Kla architecture")
     architectures = {"baseline", model_architecture, "hybridkla_architecture_aligned"}
     if len(paths) != len(SEEDS):
@@ -64,7 +64,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundles", nargs=3, required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
-    parser.add_argument("--model-architecture", choices=["token_gated", "token_gated_revised"], default="token_gated")
+    parser.add_argument("--model-architecture", choices=["token_gated", "token_gated_revised", "token_gated_conv_concat"], default="token_gated")
     args = parser.parse_args()
     rows, paired, summary = aggregate(args.bundles, model_architecture=args.model_architecture)
     args.output_dir.mkdir(parents=True, exist_ok=True)

@@ -139,6 +139,24 @@ class GatedFusion(nn.Module):
         return gate * sequence_embedding + (1.0 - gate) * feature_embedding
 
 
+class ConcatFusion(nn.Module):
+    def __init__(self, dim: int, dropout: float) -> None:
+        super().__init__()
+        self.projection = nn.Sequential(
+            nn.LayerNorm(dim * 2),
+            nn.Linear(dim * 2, dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+        )
+
+    def forward(
+        self,
+        sequence_embedding: torch.Tensor,
+        feature_embedding: torch.Tensor,
+    ) -> torch.Tensor:
+        return self.projection(torch.cat((sequence_embedding, feature_embedding), dim=1))
+
+
 class ResidualBlock(nn.Module):
     def __init__(self, dim: int, dropout: float) -> None:
         super().__init__()
@@ -340,6 +358,35 @@ class TokenGatedRevisedPCBertKla(TokenGatedPCBertKla):
         channels_first = token_embeddings.transpose(1, 2)
         local = [layer(channels_first)[:, :, site_index] for layer in self.local_filters]
         return torch.cat((pooled, *local), dim=1)
+
+
+class TokenGatedConvConcatPCBertKla(TokenGatedRevisedPCBertKla):
+    """K-centered convolutions with concatenation-based feature fusion."""
+
+    def __init__(
+        self,
+        model_name: str = "Rostlab/prot_bert",
+        feature_dim: int = 27,
+        encoder_layers: int = 4,
+        fusion_dim: int = 256,
+        attention_dim: int = 256,
+        dropout: float = 0.2,
+        site_token_index: int = 26,
+        freeze_encoder: bool = False,
+        cache_dir: str | None = None,
+    ) -> None:
+        super().__init__(
+            model_name=model_name,
+            feature_dim=feature_dim,
+            encoder_layers=encoder_layers,
+            fusion_dim=fusion_dim,
+            attention_dim=attention_dim,
+            dropout=dropout,
+            site_token_index=site_token_index,
+            freeze_encoder=freeze_encoder,
+            cache_dir=cache_dir,
+        )
+        self.fusion = ConcatFusion(fusion_dim, dropout)
 
 
 class HybridTokenGatedPCBertKla(nn.Module):

@@ -86,12 +86,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--architecture",
-        choices=["baseline", "token_gated", "token_gated_revised", "hybrid_gated"],
+        choices=["baseline", "token_gated", "token_gated_revised", "token_gated_conv_concat", "hybrid_gated"],
         default="baseline",
         help=(
             "Model architecture. 'baseline' preserves PCBert-Kla; 'token_gated' "
             "uses site-aware token attention and gated physicochemical fusion; "
             "'token_gated_revised' adds K-centered convolutions of widths 3, 5, and 9; "
+            "'token_gated_conv_concat' replaces its gate with concatenation fusion; "
             "'hybrid_gated' preserves CLS context and adds site-aware pooling."
         ),
     )

@@ -69,6 +69,17 @@ at a time with `RUN_MODE = 'development'` and `RUN_SEED` set to 42, 123, or 777.
 No test predictions are generated. Combine the resulting seed summaries with
 `scripts/aggregate_human_adamw_seeds.py --model-architecture token_gated_revised`.
 
+The [convolution and concatenation-fusion notebook](kaggle_human_conv_concat_three_models.ipynb)
+uses the same locked human data and validation-only procedure to compare
+PCBert-Kla, `token_gated_conv_concat`, and architecture-aligned HybridKla.
+Relative to the original token-gated model, it adds the K-centered convolution
+branch and replaces weighted-average gated fusion with a small projection of
+the concatenated sequence and physicochemical representations. Relative to
+`token_gated_revised`, only fusion changes. The same Kaggle dataset, secret,
+two-T4 setup, and one-seed-per-saved-version workflow apply. Its output is
+separate from the convolution-only notebook. Combine its seed summaries with
+`scripts/aggregate_human_adamw_seeds.py --model-architecture token_gated_conv_concat`.
+
 The [HybridKla-source Kaggle notebook](kaggle_hybridkla_source.ipynb) is a
 **second, provisional internal benchmark** from the official HybridKla
 workbook. It locks accession-grouped train/validation/internal-test partitions
