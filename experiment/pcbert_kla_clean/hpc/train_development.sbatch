@@ -23,7 +23,7 @@ if [[ ! -f "${HPC_DIR}/train_development.sbatch" ]]; then
 fi
 PROJECT_DIR="$(cd "${HPC_DIR}/.." && pwd)"
 REPO_DIR="$(cd "${PROJECT_DIR}/../.." && pwd)"
-VENV_DIR="${VENV_DIR:-${HOME}/.venvs/mm-kla-hpc}"
+VENV_DIR="${VENV_DIR:-${REPO_DIR}/../.venv-hpc-cu118}"
 LOCK_DIR="${LOCK_DIR:-${PROJECT_DIR}/outputs/kladb_human_locked}"
 RUN_MODEL="${RUN_MODEL:?Set RUN_MODEL to baseline, token_gated, or hybridkla_architecture_aligned}"
 RUN_SEED="${RUN_SEED:?Set RUN_SEED to 42, 123, or 777}"

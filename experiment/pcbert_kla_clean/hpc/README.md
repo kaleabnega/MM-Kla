@@ -11,7 +11,8 @@ authors' original training procedure.
 
 The job files target the `cvlab-a5000` Slurm partition. The training job
 requests one GPU, eight CPUs, 48 GiB of memory, and four days. It does not
-select a node. The environment job also runs under Slurm on a compute node;
+select a node. The environment job requests one GPU to verify that PyTorch can
+run on the allocated compute node before training is submitted;
 neither script can run directly in a login shell. The two RTX 5090 devices
 visible on the SSH host are not assumed to be the GPUs allocated by Slurm.
 
@@ -40,8 +41,11 @@ Slurm copies batch scripts into its spool area, so the jobs resolve the project
 from their working directory rather than from the script file path.
 
 Wait for it to finish successfully. It creates an isolated Python 3 virtual
-environment at `$HOME/.venvs/mm-kla-hpc`, installs the project requirements and
-PEFT, and records a dependency freeze. The compute node must have package-index
+environment at `../.venv-hpc-cu118` relative to the repository, installs
+PyTorch 2.7.1 with CUDA 11.8, the project requirements, and PEFT, and records
+a dependency freeze. It marks the environment ready only after a CUDA tensor
+operation succeeds on the allocated GPU. This uses no system-level changes and
+does not modify the earlier environment. The compute node must have package-index
 access for this setup step. The environment is created using the account's
 Miniconda Python because the system Python on the compute nodes lacks
 `ensurepip`; `PYTHON_FOR_VENV` can override that interpreter. `VENV_DIR` can

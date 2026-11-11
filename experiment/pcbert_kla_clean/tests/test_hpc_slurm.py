@@ -35,6 +35,16 @@ class HpcSlurmTests(unittest.TestCase):
         self.assertIn("--gres=gpu:1", source)
         self.assertNotIn("--run human-study ", source)
 
+    def test_environment_checks_allocated_gpu_before_ready(self):
+        source = (HPC_DIR / "setup_environment.sbatch").read_text()
+        self.assertIn("#SBATCH --gres=gpu:1", source)
+        self.assertIn("torch==2.7.1+cu118", source)
+        self.assertIn("torch.cuda.is_available()", source)
+        self.assertLess(source.index("torch.cuda.is_available()"), source.index('touch "${VENV_DIR}/.ready"'))
+        training = (HPC_DIR / "train_development.sbatch").read_text()
+        self.assertIn('REPO_DIR}/../.venv-hpc-cu118', source)
+        self.assertIn('REPO_DIR}/../.venv-hpc-cu118', training)
+
     def test_hybrid_archive_rejected_before_extraction(self):
         helper = HPC_DIR / "extract_hybridkla_resources.py"
         with tempfile.TemporaryDirectory() as temporary:

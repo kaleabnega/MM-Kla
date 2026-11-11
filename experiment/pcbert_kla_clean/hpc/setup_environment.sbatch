@@ -3,6 +3,7 @@
 #SBATCH --partition=cvlab-a5000
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
 #SBATCH --time=02:00:00
@@ -21,7 +22,8 @@ if [[ ! -f "${HPC_DIR}/setup_environment.sbatch" ]]; then
     exit 2
 fi
 PROJECT_DIR="$(cd "${HPC_DIR}/.." && pwd)"
-VENV_DIR="${VENV_DIR:-${HOME}/.venvs/mm-kla-hpc}"
+REPO_DIR="$(cd "${PROJECT_DIR}/../.." && pwd)"
+VENV_DIR="${VENV_DIR:-${REPO_DIR}/../.venv-hpc-cu118}"
 PYTHON_FOR_VENV="${PYTHON_FOR_VENV:-${HOME}/.miniconda3/bin/python}"
 
 if [[ -e "${VENV_DIR}/.ready" ]]; then
@@ -35,8 +37,11 @@ fi
 
 "${PYTHON_FOR_VENV}" -m venv "${VENV_DIR}"
 "${VENV_DIR}/bin/python" -m pip install --upgrade pip
+"${VENV_DIR}/bin/python" -m pip install --timeout 120 --retries 5 \
+    'torch==2.7.1+cu118' --index-url https://download.pytorch.org/whl/cu118
 "${VENV_DIR}/bin/python" -m pip install -r "${PROJECT_DIR}/requirements.txt" 'peft>=0.11,<1'
+"${VENV_DIR}/bin/python" -m pip check
 "${VENV_DIR}/bin/python" -m pip freeze > "${VENV_DIR}/requirements.freeze.txt"
-"${VENV_DIR}/bin/python" -c 'import torch, transformers, peft; print("torch", torch.__version__, "transformers", transformers.__version__, "peft", peft.__version__)'
+"${VENV_DIR}/bin/python" -c 'import torch, transformers, peft; assert torch.__version__.startswith("2.7.1+cu118"); assert torch.cuda.is_available() and torch.cuda.device_count() == 1, "Allocated GPU unavailable"; x = torch.ones(1, device="cuda"); assert x.item() == 1; print("torch", torch.__version__, "transformers", transformers.__version__, "peft", peft.__version__, "GPU", torch.cuda.get_device_name(0))'
 touch "${VENV_DIR}/.ready"
 echo "Environment prepared: ${VENV_DIR}"
