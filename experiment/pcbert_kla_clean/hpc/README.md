@@ -35,6 +35,10 @@ Submit the environment job once from this `hpc/` directory:
 sbatch setup_environment.sbatch
 ```
 
+When submitting from another directory, pass `--chdir=/absolute/path/to/hpc`.
+Slurm copies batch scripts into its spool area, so the jobs resolve the project
+from their working directory rather than from the script file path.
+
 Wait for it to finish successfully. It creates an isolated Python 3 virtual
 environment at `$HOME/.venvs/mm-kla-hpc`, installs the project requirements and
 PEFT, and records a dependency freeze. The compute node must have package-index
@@ -59,7 +63,7 @@ job for each model and seed. For example:
 export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
 export RUN_SEED=42
 export RUN_MODEL=token_gated
-sbatch --export=ALL train_development.sbatch
+sbatch --job-name=project-esm --export=ALL train_development.sbatch
 ```
 
 Valid `RUN_MODEL` values are `baseline`, `token_gated`, and

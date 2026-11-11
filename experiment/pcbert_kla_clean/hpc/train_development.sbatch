@@ -16,7 +16,11 @@ if [[ -z "${SLURM_JOB_ID:-}" || -z "${SLURMD_NODENAME:-}" || "${SLURM_JOB_PARTIT
     exit 2
 fi
 
-HPC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HPC_DIR="$(pwd -P)"
+if [[ ! -f "${HPC_DIR}/train_development.sbatch" ]]; then
+    echo "Submit from the hpc directory or pass --chdir to sbatch." >&2
+    exit 2
+fi
 PROJECT_DIR="$(cd "${HPC_DIR}/.." && pwd)"
 REPO_DIR="$(cd "${PROJECT_DIR}/../.." && pwd)"
 VENV_DIR="${VENV_DIR:-${HOME}/.venvs/mm-kla-hpc}"

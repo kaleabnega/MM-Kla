@@ -17,6 +17,8 @@ class HpcSlurmTests(unittest.TestCase):
                 source = path.read_text()
                 self.assertIn("#SBATCH --partition=cvlab-a5000", source)
                 self.assertIn("SLURMD_NODENAME", source)
+                self.assertIn('HPC_DIR="$(pwd -P)"', source)
+                self.assertNotIn("BASH_SOURCE", source)
                 environment = os.environ.copy()
                 for key in ("SLURM_JOB_ID", "SLURMD_NODENAME", "SLURM_JOB_PARTITION"):
                     environment.pop(key, None)
