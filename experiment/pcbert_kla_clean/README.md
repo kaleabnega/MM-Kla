@@ -80,6 +80,17 @@ two-T4 setup, and one-seed-per-saved-version workflow apply. Its output is
 separate from the convolution-only notebook. Combine its seed summaries with
 `scripts/aggregate_human_adamw_seeds.py --model-architecture token_gated_conv_concat`.
 
+The [full-depth ESM-2/LoRA development notebook](kaggle_human_esm2_lora_three_models.ipynb)
+compares the four-layer ProtBERT baseline, the original token-gated head with a
+33-layer ESM-2 650M encoder adapted by LoRA, and architecture-aligned HybridKla
+on the same locked human train/validation split. It uses the same private
+lock/manifest dataset and official HybridKla resources. Set `RUN_MODE = 'pilot'`
+to check ESM-2 GPU memory and core-model step time, then use
+`RUN_MODE = 'development'` for one seed per saved Kaggle version. The default
+`check` mode trains nothing. All three rows report validation metrics only;
+the test partitions are not scored. Full ESM-2 may exceed Kaggle's free-tier
+runtime, so the pilot is important before a full run.
+
 The [HybridKla-source Kaggle notebook](kaggle_hybridkla_source.ipynb) is a
 **second, provisional internal benchmark** from the official HybridKla
 workbook. It locks accession-grouped train/validation/internal-test partitions
@@ -513,8 +524,9 @@ python3 scripts/run_replication.py \
   the default validation split.
 - Protein language model embeddings are computed during each training and
   evaluation batch; they are not precomputed.
-- Mixed precision, gradient accumulation, LoRA, and gradient checkpointing are
-  not enabled in the current implementation.
+- Mixed precision, gradient accumulation, and gradient checkpointing are not
+  enabled in the runner. LoRA is optional for the token-gated encoder via
+  `--encoder-adaptation lora`; its default remains full fine-tuning.
 
 ## Benchmark Caveat
 

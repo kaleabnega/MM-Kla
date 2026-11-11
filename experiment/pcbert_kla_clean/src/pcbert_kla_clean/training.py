@@ -144,6 +144,10 @@ def build_model(args: Namespace, feature_dim: int, device: torch.device) -> nn.M
             freeze_encoder=args.freeze_encoder,
             ablation=args.ablation,
             cache_dir=args.cache_dir,
+            encoder_adaptation=getattr(args, "encoder_adaptation", "full"),
+            lora_rank=getattr(args, "lora_rank", 8),
+            lora_alpha=getattr(args, "lora_alpha", 32),
+            lora_dropout=getattr(args, "lora_dropout", 0.3),
         )
     elif args.architecture == "token_gated_revised":
         if args.ablation != "none":

@@ -82,6 +82,27 @@ def set_encoder_trainable(encoder: nn.Module, trainable: bool) -> None:
         parameter.requires_grad = trainable
 
 
+def add_lora_to_encoder(
+    encoder: nn.Module,
+    rank: int,
+    alpha: int,
+    dropout: float,
+) -> nn.Module:
+    from peft import LoraConfig, TaskType, get_peft_model
+
+    if rank <= 0 or alpha <= 0 or not 0 <= dropout < 1:
+        raise ValueError("LoRA rank and alpha must be positive; dropout must be in [0, 1)")
+    config = LoraConfig(
+        task_type=TaskType.FEATURE_EXTRACTION,
+        r=rank,
+        lora_alpha=alpha,
+        lora_dropout=dropout,
+        target_modules=["query", "key", "value"],
+        bias="none",
+    )
+    return get_peft_model(encoder, config)
+
+
 def encode_with_optional_freeze(
     encoder: nn.Module,
     model_inputs: dict[str, torch.Tensor],

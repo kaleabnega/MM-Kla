@@ -317,9 +317,15 @@ def train_and_predict_independent(
             if val_score > best_val_score:
                 best_val_score = val_score
                 best_epoch = epoch
+                trainable_keys = (
+                    {name for name, parameter in model.named_parameters() if parameter.requires_grad}
+                    if getattr(args, "encoder_adaptation", "full") == "lora"
+                    else None
+                )
                 best_state = {
                     key: value.detach().cpu().clone()
                     for key, value in model.state_dict().items()
+                    if trainable_keys is None or key in trainable_keys
                 }
                 patience_left = args.patience
             else:
@@ -331,7 +337,10 @@ def train_and_predict_independent(
             print(f"epoch={epoch:02d} train_loss={train_loss:.4f}")
 
     if best_state is not None:
-        model.load_state_dict(best_state)
+        model.load_state_dict(
+            best_state,
+            strict=getattr(args, "encoder_adaptation", "full") != "lora",
+        )
 
     threshold = args.decision_threshold
     threshold_source = "fixed"

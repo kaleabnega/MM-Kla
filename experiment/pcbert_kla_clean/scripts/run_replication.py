@@ -122,6 +122,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-ratio", type=float, default=0.0)
     parser.add_argument("--encoder-layers", type=int, default=4)
     parser.add_argument(
+        "--encoder-adaptation", choices=["full", "lora"], default="full",
+        help="Train all encoder weights or LoRA query/key/value adapters.",
+    )
+    parser.add_argument("--lora-rank", type=int, default=8)
+    parser.add_argument("--lora-alpha", type=int, default=32)
+    parser.add_argument("--lora-dropout", type=float, default=0.3)
+    parser.add_argument(
         "--freeze-encoder",
         action="store_true",
         help="Train only the task-specific head while using the PLM as a feature extractor.",
@@ -218,6 +225,8 @@ def run_data_check(train_split, test_split) -> None:
 
 def main() -> None:
     args = parse_args()
+    if args.encoder_adaptation == "lora" and args.architecture != "token_gated":
+        raise ValueError("LoRA encoder adaptation currently supports --architecture token_gated only")
     if args.monitor_metric is None:
         args.monitor_metric = "AUPRC" if args.run in {"window-diagnostic", "candidate-group-diagnostic", "source-study", "source-study-development", "human-study", "human-study-development", "hybridkla-source", "hybridkla-source-development", "hybridkla-study", "hybridkla-study-development", "pcbert-revised", "pcbert-revised-development"} else "ACC"
 

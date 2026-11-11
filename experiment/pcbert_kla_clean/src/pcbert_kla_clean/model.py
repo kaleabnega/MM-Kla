@@ -4,6 +4,7 @@ import torch
 from torch import nn
 
 from pcbert_kla_clean.backbones import (
+    add_lora_to_encoder,
     encode_with_optional_freeze,
     encoder_hidden_size,
     is_t5_like_model,
@@ -188,6 +189,10 @@ class TokenGatedPCBertKla(nn.Module):
         freeze_encoder: bool = False,
         ablation: str = "none",
         cache_dir: str | None = None,
+        encoder_adaptation: str = "full",
+        lora_rank: int = 8,
+        lora_alpha: int = 32,
+        lora_dropout: float = 0.3,
     ) -> None:
         super().__init__()
         if ablation not in {
@@ -202,12 +207,21 @@ class TokenGatedPCBertKla(nn.Module):
         self.ablation = ablation
         self.uses_sequence = ablation != "no_sequence"
         self.uses_features = ablation != "no_physicochemical"
+        if encoder_adaptation not in {"full", "lora"}:
+            raise ValueError(f"Unsupported encoder adaptation: {encoder_adaptation}")
+        if encoder_adaptation == "lora" and (freeze_encoder or not self.uses_sequence):
+            raise ValueError("LoRA requires an active, non-frozen sequence encoder")
 
         if self.uses_sequence:
             self.encoder = load_encoder(model_name, cache_dir)
             truncate_encoder_layers(self.encoder, encoder_layers)
-            set_encoder_trainable(self.encoder, trainable=not freeze_encoder)
             hidden_size = encoder_hidden_size(self.encoder)
+            if encoder_adaptation == "lora":
+                self.encoder = add_lora_to_encoder(
+                    self.encoder, lora_rank, lora_alpha, lora_dropout
+                )
+            else:
+                set_encoder_trainable(self.encoder, trainable=not freeze_encoder)
             self.site_attention = SiteAttentionPooling(
                 hidden_size=hidden_size,
                 attention_dim=attention_dim,
