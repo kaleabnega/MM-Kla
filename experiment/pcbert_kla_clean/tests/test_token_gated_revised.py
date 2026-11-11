@@ -32,6 +32,20 @@ class SmallEncoder(nn.Module):
 
 
 class TokenGatedRevisedTests(unittest.TestCase):
+    def test_kaggle_notebooks_checkout_pinned_commit_before_training(self):
+        root = Path(__file__).resolve().parents[1]
+        for filename in (
+            "kaggle_human_local_conv_three_models.ipynb",
+            "kaggle_human_conv_concat_three_models.ipynb",
+        ):
+            with self.subTest(notebook=filename):
+                notebook = json.loads((root / filename).read_text())
+                setup = "".join(notebook["cells"][4]["source"])
+                self.assertIn("if EXPECTED_COMMIT is None:\n                clone_command.extend(['--depth', '1'])", setup)
+                self.assertIn("clone_command.extend([REPO_URL, str(REPO)])", setup)
+                self.assertIn("['git', 'checkout', '--detach', EXPECTED_COMMIT]", setup)
+                self.assertLess(setup.index("['git', 'checkout', '--detach', EXPECTED_COMMIT]"), setup.index("'-m', 'pip'"))
+
     def test_convolution_branches_receive_gradients(self):
         with patch("pcbert_kla_clean.model.load_encoder", return_value=SmallEncoder()):
             model = TokenGatedRevisedPCBertKla(
