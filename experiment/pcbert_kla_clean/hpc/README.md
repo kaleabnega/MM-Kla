@@ -90,3 +90,25 @@ dataset lock, and environment. The training code does **not** resume an
 interrupted epoch or job; rerunning with a smaller epoch count would be a new
 experiment, not continuation. No test partition should be used to select a
 model or threshold.
+
+## Thirty-epoch ESM-2 run and paired comparison
+
+Set `RUN_PATIENCE=0` for an MM-Kla run that completes all 30 epochs. The
+validation AUPRC is printed after every epoch, and the checkpoint with the
+highest validation AUPRC is selected after training. It does not use the test
+sets. Use a new `OUTPUT_ROOT`; existing run directories are never overwritten.
+
+`compare_baseline_hybrid.sbatch` runs PCBert-Kla and then the
+HybridKla-aligned implementation sequentially on one allocated GPU, for the
+same seed and locked development split. PCBert-Kla retains its predeclared
+patience of five; the HybridKla-aligned pipeline retains its own stage-level
+patience of six. Both runs use the same `OUTPUT_ROOT` as the MM-Kla run, in
+separate model directories. The comparison job verifies the official
+`HybridKla.bin` checksum before starting PCBert-Kla. By default it expects
+the archive beside the repository in the account's work directory; set
+`HYBRID_ARCHIVE` to an absolute path to use another location.
+
+The comparison may be queued with `--dependency=afterok:<ESM_JOB_ID>`. This
+starts it only after the full-epoch MM-Kla job succeeds. A single comparison
+job avoids a second GPU allocation, but if HybridKla-aligned fails, the
+completed PCBert-Kla results remain in its output directory.

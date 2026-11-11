@@ -10,7 +10,11 @@ HPC_DIR = Path(__file__).resolve().parents[1] / "hpc"
 
 class HpcSlurmTests(unittest.TestCase):
     def test_job_files_have_valid_bash_syntax_and_refuse_login_execution(self):
-        for name in ("setup_environment.sbatch", "train_development.sbatch"):
+        for name in (
+            "setup_environment.sbatch",
+            "train_development.sbatch",
+            "compare_baseline_hybrid.sbatch",
+        ):
             path = HPC_DIR / name
             with self.subTest(name=name):
                 subprocess.run(["bash", "-n", str(path)], check=True)
@@ -34,6 +38,19 @@ class HpcSlurmTests(unittest.TestCase):
         self.assertIn("--development-only", source)
         self.assertIn("--gres=gpu:1", source)
         self.assertNotIn("--run human-study ", source)
+
+    def test_full_epoch_switch_and_paired_comparison(self):
+        training = (HPC_DIR / "train_development.sbatch").read_text()
+        comparison = (HPC_DIR / "compare_baseline_hybrid.sbatch").read_text()
+        self.assertIn('RUN_PATIENCE="${RUN_PATIENCE:-5}"', training)
+        self.assertIn('--patience "${RUN_PATIENCE}"', training)
+        self.assertIn("RUN_MODEL=baseline bash", comparison)
+        self.assertIn("RUN_MODEL=hybridkla_architecture_aligned bash", comparison)
+        self.assertLess(
+            comparison.index("RUN_MODEL=baseline bash"),
+            comparison.index("RUN_MODEL=hybridkla_architecture_aligned bash"),
+        )
+        self.assertIn("73ddb128c441d7b213c4636e6bb6ce34501e82143c2b9bc06ec329d68a422993", comparison)
 
     def test_environment_checks_allocated_gpu_before_ready(self):
         source = (HPC_DIR / "setup_environment.sbatch").read_text()

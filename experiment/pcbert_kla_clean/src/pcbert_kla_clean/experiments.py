@@ -311,7 +311,8 @@ def train_and_predict_independent(
             print(
                 f"epoch={epoch:02d} train_loss={train_loss:.4f} "
                 f"val_loss={val_loss:.4f} ACC={val_metrics['ACC']:.4f} "
-                f"MCC={val_metrics['MCC']:.4f} AUC={val_metrics['AUC']:.4f}"
+                f"MCC={val_metrics['MCC']:.4f} AUC={val_metrics['AUC']:.4f} "
+                f"AUPRC={val_metrics['AUPRC']:.4f}"
             )
             val_score = val_metrics[args.monitor_metric]
             if val_score > best_val_score:

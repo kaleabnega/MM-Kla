@@ -27,6 +27,7 @@ VENV_DIR="${VENV_DIR:-${REPO_DIR}/../.venv-hpc-cu118}"
 LOCK_DIR="${LOCK_DIR:-${PROJECT_DIR}/outputs/kladb_human_locked}"
 RUN_MODEL="${RUN_MODEL:?Set RUN_MODEL to baseline, token_gated, or hybridkla_architecture_aligned}"
 RUN_SEED="${RUN_SEED:?Set RUN_SEED to 42, 123, or 777}"
+RUN_PATIENCE="${RUN_PATIENCE:-5}"
 EXPECTED_COMMIT="${EXPECTED_COMMIT:?Set EXPECTED_COMMIT to the 40-character Git commit hash}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_DIR}/outputs/hpc_human_esm2_lora}"
 RUN_DIR="${OUTPUT_ROOT}/${RUN_MODEL}/seed_${RUN_SEED}"
@@ -39,6 +40,10 @@ case "${RUN_SEED}" in
     42|123|777) ;;
     *) echo "Unsupported RUN_SEED: ${RUN_SEED}" >&2; exit 2 ;;
 esac
+if [[ ! "${RUN_PATIENCE}" =~ ^[0-9]+$ ]]; then
+    echo "RUN_PATIENCE must be a nonnegative integer." >&2
+    exit 2
+fi
 if [[ ! "${EXPECTED_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
     echo "EXPECTED_COMMIT must be a full lowercase Git commit hash." >&2
     exit 2
@@ -79,8 +84,8 @@ PYTHON="${VENV_DIR}/bin/python"
 "${PYTHON}" "${PROJECT_DIR}/scripts/run_replication.py" --run human-study-check --human-lock "${LOCK}"
 
 mkdir -p "${RUN_DIR}"
-printf 'job_id=%s\nnode=%s\nmodel=%s\nseed=%s\ncommit=%s\n' \
-    "${SLURM_JOB_ID}" "${SLURMD_NODENAME:-unknown}" "${RUN_MODEL}" "${RUN_SEED}" "${EXPECTED_COMMIT}" \
+printf 'job_id=%s\nnode=%s\nmodel=%s\nseed=%s\npatience=%s\ncommit=%s\n' \
+    "${SLURM_JOB_ID}" "${SLURMD_NODENAME:-unknown}" "${RUN_MODEL}" "${RUN_SEED}" "${RUN_PATIENCE}" "${EXPECTED_COMMIT}" \
     > "${RUN_DIR}/job_metadata.txt"
 "${PYTHON}" -m pip freeze > "${RUN_DIR}/requirements.freeze.txt"
 nvidia-smi
@@ -108,7 +113,7 @@ else
     "${PYTHON}" -u "${PROJECT_DIR}/scripts/run_replication.py" \
         --run human-study-development --human-lock "${LOCK}" \
         --architecture "${RUN_MODEL}" "${model_args[@]}" \
-        --epochs 30 --patience 5 --batch-size 4 --device cuda:0 \
+        --epochs 30 --patience "${RUN_PATIENCE}" --batch-size 4 --device cuda:0 \
         --optimizer adamw --learning-rate 2e-5 --weight-decay 0.01 \
         --scheduler linear --warmup-ratio 0.1 \
         --positive-weighting none --monitor-metric AUPRC \
