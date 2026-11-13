@@ -124,6 +124,14 @@ held-out test**. The HybridKla runner is architecture-aligned, not an exact
 replication of the upstream training code; the provenance of the official
 AAindex `top10.txt` selection is not established.
 
+`project_mmkla_protbert_clear.sbatch` runs the token-gated architecture with
+four fine-tuned ProtBert layers on the same locked split and AdamW training
+protocol. It writes to `token_gated_protbert/seed_42/`, leaving the ESM-2
+results intact. This reproduces the earlier backbone/architecture combination,
+but not the historical SGD optimizer configuration; it also differs from the
+ESM-2 run in encoder depth and adaptation method, so the comparison does not
+isolate backbone identity alone.
+
 The two files in `outputs/clear_lactyl_locked/` required on the server are
 `split_audit.json` and `model_manifest.csv`; the submission script checks
 their pinned hashes. These are ignored by Git and must be transferred

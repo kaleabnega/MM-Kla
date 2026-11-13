@@ -14,13 +14,13 @@ VENV_DIR="${VENV_DIR:-${REPO_DIR}/../.venv-hpc-cu118}"
 LOCK_DIR="${LOCK_DIR:-${PROJECT_DIR}/outputs/clear_lactyl_locked}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_DIR}/outputs/hpc_clear_lactyl_development}"
 HYBRID_ARCHIVE="${HYBRID_ARCHIVE:-${REPO_DIR}/../HybridKla.bin}"
-RUN_MODEL="${RUN_MODEL:?Set RUN_MODEL to baseline, token_gated, or hybridkla_architecture_aligned}"
+RUN_MODEL="${RUN_MODEL:?Set RUN_MODEL to baseline, token_gated, token_gated_protbert, or hybridkla_architecture_aligned}"
 RUN_SEED="${RUN_SEED:?Set RUN_SEED to a nonnegative integer}"
 EXPECTED_COMMIT="${EXPECTED_COMMIT:?Set EXPECTED_COMMIT to the full repository commit}"
 RUN_DIR="${OUTPUT_ROOT}/${RUN_MODEL}/seed_${RUN_SEED}"
 
 case "${RUN_MODEL}" in
-    baseline|token_gated|hybridkla_architecture_aligned) ;;
+    baseline|token_gated|token_gated_protbert|hybridkla_architecture_aligned) ;;
     *) echo "Unsupported model: ${RUN_MODEL}" >&2; exit 2 ;;
 esac
 if [[ ! "${RUN_SEED}" =~ ^[0-9]+$ || ! "${EXPECTED_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
@@ -74,14 +74,17 @@ if [[ "${RUN_MODEL}" == hybridkla_architecture_aligned ]]; then
         --patience 6 --development-only
 else
     model_args=(--model-name Rostlab/prot_bert --encoder-layers 4)
+    architecture="${RUN_MODEL}"
     if [[ "${RUN_MODEL}" == token_gated ]]; then
         model_args=(--model-name facebook/esm2_t33_650M_UR50D \
             --encoder-layers 33 --encoder-adaptation lora \
             --lora-rank 8 --lora-alpha 32 --lora-dropout 0.3)
+    elif [[ "${RUN_MODEL}" == token_gated_protbert ]]; then
+        architecture=token_gated
     fi
     "${PYTHON}" -u "${PROJECT_DIR}/scripts/run_replication.py" \
         --run clear-lactyl-development --clear-lock "${LOCK}" \
-        --architecture "${RUN_MODEL}" "${model_args[@]}" \
+        --architecture "${architecture}" "${model_args[@]}" \
         --epochs 30 --patience 5 --batch-size 4 --device cuda:0 \
         --optimizer adamw --learning-rate 2e-5 --weight-decay 0.01 \
         --scheduler linear --warmup-ratio 0.1 \
