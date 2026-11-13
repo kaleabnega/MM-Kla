@@ -126,6 +126,26 @@ class HpcSlurmTests(unittest.TestCase):
         self.assertIn("optimizer_args+=(--head-learning-rate 1e-4)", runner)
         self.assertIn("--epochs 30 --patience 5 --batch-size 4", runner)
 
+    def test_new_clear_jobs_keep_locked_development_protocol(self):
+        runner = (HPC_DIR / "run_clear_development.sh").read_text()
+        for filename, model in (
+            ("project_mmkla_full_protbert_all_clear.sbatch", "token_gated_protbert_full30_all"),
+            ("project_mmkla_cksaap_projection_clear.sbatch", "token_gated_protbert_cksaap_projection"),
+        ):
+            path = HPC_DIR / filename
+            with self.subTest(job=filename):
+                subprocess.run(["bash", "-n", str(path)], check=True)
+                self.assertIn(f"RUN_MODEL={model}", path.read_text())
+                self.assertIn("#SBATCH --partition=cvlab-a5000", path.read_text())
+                self.assertIn("#SBATCH --gres=gpu:1", path.read_text())
+        self.assertIn("--encoder-layers 30)", runner)
+        self.assertIn("architecture=token_gated_cksaap_projection", runner)
+        self.assertIn("--add-cksaap", runner)
+        self.assertIn("--run clear-lactyl-development", runner)
+        self.assertIn("--monitor-metric AUPRC", runner)
+        self.assertIn("--head-learning-rate 1e-4", runner)
+        self.assertNotIn("--run clear-lactyl ", runner)
+
 
 if __name__ == "__main__":
     unittest.main()

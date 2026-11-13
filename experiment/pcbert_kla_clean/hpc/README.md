@@ -229,5 +229,38 @@ export RUN_SEED=42
 sbatch --export=ALL project_mmkla_cksaap_clear.sbatch
 ```
 
+### All-layer ProtBERT and projected CKSAAP
+
+`project_mmkla_full_protbert_all_clear.sbatch` keeps all 30 ProtBERT layers and
+trains all of them. Unlike the earlier `full30_last4` run, no encoder layers
+are frozen. It keeps the token-gated head, 27 descriptors, AdamW learning-rate
+groups (`2e-5` encoder, `1e-4` head), and the existing validation protocol.
+Compare it with the four-layer `token_gated_protbert_head_lr` control and the
+`full30_last4` run; the latter is not a test of all-layer fine-tuning.
+
+`project_mmkla_cksaap_projection_clear.sbatch` keeps four trainable ProtBERT
+layers. It projects the 1,600 CKSAAP features to 128 dimensions using
+LayerNorm, Linear, GELU, and 0.3 dropout. The projected vector is concatenated
+with the original 27 descriptors before the existing feature projection and
+gated fusion. Compare it with `token_gated_protbert_cksaap` to isolate this
+feature-branch change.
+
+Both jobs use the same locked CLEAR-Lactyl train/validation partitions,
+seed, batch size 4, maximum 30 epochs, patience 5, and validation AUPRC for
+checkpoint selection. Neither scores the held-out test. After syncing the
+code commit, submit from the HPC directory:
+
+```bash
+export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
+export RUN_SEED=42
+sbatch --export=ALL project_mmkla_full_protbert_all_clear.sbatch
+sbatch --export=ALL project_mmkla_cksaap_projection_clear.sbatch
+```
+
+Results have distinct `token_gated_protbert_full30_all/seed_42/` and
+`token_gated_protbert_cksaap_projection/seed_42/` directories under
+`outputs/hpc_clear_lactyl_development/`. Each job requires a Slurm compute
+allocation and refuses an existing run directory.
+
 Results are written to
 `outputs/hpc_clear_lactyl_development/token_gated_protbert_cksaap/seed_42/`.

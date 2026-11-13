@@ -20,7 +20,7 @@ EXPECTED_COMMIT="${EXPECTED_COMMIT:?Set EXPECTED_COMMIT to the full repository c
 RUN_DIR="${OUTPUT_ROOT}/${RUN_MODEL}/seed_${RUN_SEED}"
 
 case "${RUN_MODEL}" in
-    baseline|token_gated|token_gated_protbert|token_gated_protbert_sgd|token_gated_protbert_adamw|token_gated_protbert_head_lr|token_gated_protbert_cksaap|token_gated_protbert_full30_last4|token_gated_protbert_bilstm|hybridkla_architecture_aligned) ;;
+    baseline|token_gated|token_gated_protbert|token_gated_protbert_sgd|token_gated_protbert_adamw|token_gated_protbert_head_lr|token_gated_protbert_cksaap|token_gated_protbert_cksaap_projection|token_gated_protbert_full30_last4|token_gated_protbert_full30_all|token_gated_protbert_bilstm|hybridkla_architecture_aligned) ;;
     *) echo "Unsupported model: ${RUN_MODEL}" >&2; exit 2 ;;
 esac
 if [[ ! "${RUN_SEED}" =~ ^[0-9]+$ || ! "${EXPECTED_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
@@ -87,6 +87,14 @@ else
     elif [[ "${RUN_MODEL}" == token_gated_protbert_full30_last4 ]]; then
         architecture=token_gated
         model_args=(--model-name Rostlab/prot_bert --encoder-layers 30 --train-last-encoder-layers 4)
+        optimizer_args+=(--head-learning-rate 1e-4)
+    elif [[ "${RUN_MODEL}" == token_gated_protbert_full30_all ]]; then
+        architecture=token_gated
+        model_args=(--model-name Rostlab/prot_bert --encoder-layers 30)
+        optimizer_args+=(--head-learning-rate 1e-4)
+    elif [[ "${RUN_MODEL}" == token_gated_protbert_cksaap_projection ]]; then
+        architecture=token_gated_cksaap_projection
+        model_args+=(--add-cksaap)
         optimizer_args+=(--head-learning-rate 1e-4)
     elif [[ "${RUN_MODEL}" == token_gated_protbert_cksaap ]]; then
         architecture=token_gated

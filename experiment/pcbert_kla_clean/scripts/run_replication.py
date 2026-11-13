@@ -92,11 +92,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--architecture",
-        choices=["baseline", "token_gated", "token_gated_bilstm", "token_gated_revised", "token_gated_conv_concat", "hybrid_gated"],
+        choices=["baseline", "token_gated", "token_gated_cksaap_projection", "token_gated_bilstm", "token_gated_revised", "token_gated_conv_concat", "hybrid_gated"],
         default="baseline",
         help=(
             "Model architecture. 'baseline' preserves PCBert-Kla; 'token_gated' "
             "uses site-aware token attention and gated physicochemical fusion; "
+            "'token_gated_cksaap_projection' separately projects CKSAAP features; "
             "'token_gated_bilstm' adds central-lysine raw-residue BiLSTM context; "
             "'token_gated_revised' adds K-centered convolutions of widths 3, 5, and 9; "
             "'token_gated_conv_concat' replaces its gate with concatenation fusion; "
@@ -253,6 +254,8 @@ def main() -> None:
         raise ValueError("--train-last-encoder-layers requires --architecture token_gated")
     if args.add_cksaap and args.run not in {"clear-lactyl-check", "clear-lactyl-development"}:
         raise ValueError("--add-cksaap currently supports CLEAR-Lactyl runs only")
+    if args.architecture == "token_gated_cksaap_projection" and not args.add_cksaap:
+        raise ValueError("--architecture token_gated_cksaap_projection requires --add-cksaap")
     if args.monitor_metric is None:
         args.monitor_metric = "AUPRC" if args.run in {"window-diagnostic", "candidate-group-diagnostic", "source-study", "source-study-development", "human-study", "human-study-development", "clear-lactyl-development", "hybridkla-source", "hybridkla-source-development", "hybridkla-study", "hybridkla-study-development", "pcbert-revised", "pcbert-revised-development"} else "ACC"
 

@@ -325,6 +325,36 @@ class TokenGatedPCBertKla(nn.Module):
         return torch.sigmoid(self.classifier(fused)).squeeze(-1)
 
 
+class TokenGatedCKSAAPProjectionPCBertKla(TokenGatedPCBertKla):
+    """Project CKSAAP separately before combining it with the 27 descriptors."""
+
+    def __init__(self, feature_dim: int, **kwargs) -> None:
+        descriptor_dim = 27
+        if feature_dim <= descriptor_dim:
+            raise ValueError("CKSAAP projection requires descriptors followed by CKSAAP features")
+        cksaap_dim = feature_dim - descriptor_dim
+        super().__init__(feature_dim=descriptor_dim + 128, **kwargs)
+        self.cksaap_projection = nn.Sequential(
+            nn.LayerNorm(cksaap_dim),
+            nn.Linear(cksaap_dim, 128),
+            nn.GELU(),
+            nn.Dropout(0.3),
+        )
+
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        features: torch.Tensor,
+        token_type_ids: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        if features.shape[1] != self.cksaap_projection[0].normalized_shape[0] + 27:
+            raise ValueError("Unexpected descriptor/CKSAAP feature width")
+        projected = self.cksaap_projection(features[:, 27:])
+        combined = torch.cat((features[:, :27], projected), dim=1)
+        return super().forward(input_ids, attention_mask, combined, token_type_ids)
+
+
 class TokenGatedRevisedPCBertKla(TokenGatedPCBertKla):
     """Token-gated model with a K-centered, multi-scale convolutional branch."""
 

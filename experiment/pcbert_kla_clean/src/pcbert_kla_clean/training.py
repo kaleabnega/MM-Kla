@@ -16,6 +16,7 @@ from pcbert_kla_clean.model import (
     TokenGatedConvConcatPCBertKla,
     TokenGatedBiLSTMPCBertKla,
     TokenGatedPCBertKla,
+    TokenGatedCKSAAPProjectionPCBertKla,
     TokenGatedRevisedPCBertKla,
 )
 
@@ -150,6 +151,20 @@ def build_model(args: Namespace, feature_dim: int, device: torch.device) -> nn.M
             lora_alpha=getattr(args, "lora_alpha", 32),
             lora_dropout=getattr(args, "lora_dropout", 0.3),
             train_last_encoder_layers=getattr(args, "train_last_encoder_layers", None),
+        )
+    elif args.architecture == "token_gated_cksaap_projection":
+        if args.ablation != "none" or not getattr(args, "add_cksaap", False):
+            raise ValueError("CKSAAP projection requires --add-cksaap and no ablation")
+        model = TokenGatedCKSAAPProjectionPCBertKla(
+            model_name=args.model_name,
+            feature_dim=feature_dim,
+            encoder_layers=args.encoder_layers,
+            fusion_dim=args.fusion_dim,
+            attention_dim=args.attention_dim,
+            dropout=args.arch_dropout,
+            site_token_index=args.site_token_index,
+            freeze_encoder=args.freeze_encoder,
+            cache_dir=args.cache_dir,
         )
     elif args.architecture == "token_gated_revised":
         if args.ablation != "none":
