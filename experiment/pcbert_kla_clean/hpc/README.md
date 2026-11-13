@@ -187,3 +187,26 @@ Results go to separate `token_gated_protbert_head_lr/seed_42/` and
 `outputs/hpc_clear_lactyl_development/`. Neither script pins a node or runs
 training without a Slurm compute allocation. Subsequent seeds should use the
 same code commit and lock; neither job resumes an interrupted run.
+
+### Full-depth ProtBERT with last-four-layer adaptation
+
+`project_mmkla_full_protbert_clear.sbatch` evaluates the existing token-gated
+MM-Kla head with all 30 pretrained ProtBERT encoder layers retained. The
+embeddings and layers 0-25 are frozen; only layers 26-29 and the task-specific
+head are trainable. This contrasts with `project_mmkla_bilstm_control.sbatch`,
+which retains and trains only layers 0-3. The locked CLEAR-Lactyl training and
+validation partitions, seed, batch size, optimizer, learning-rate groups,
+30-epoch cap, early stopping, and AUPRC selection are otherwise the same.
+This tests the full-depth/last-four configuration, not depth in isolation.
+The held-out test is not evaluated.
+
+Submit from the HPC directory after syncing the commit:
+
+```bash
+export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
+export RUN_SEED=42
+sbatch --export=ALL project_mmkla_full_protbert_clear.sbatch
+```
+
+Results are written to
+`outputs/hpc_clear_lactyl_development/token_gated_protbert_full30_last4/seed_42/`.

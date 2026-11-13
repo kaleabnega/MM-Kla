@@ -133,6 +133,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-ratio", type=float, default=0.0)
     parser.add_argument("--encoder-layers", type=int, default=4)
     parser.add_argument(
+        "--train-last-encoder-layers", type=int, default=None,
+        help="Keep --encoder-layers pretrained layers, but update only the last N; token_gated only.",
+    )
+    parser.add_argument(
         "--encoder-adaptation", choices=["full", "lora"], default="full",
         help="Train all encoder weights or LoRA query/key/value adapters.",
     )
@@ -241,6 +245,8 @@ def main() -> None:
     args = parse_args()
     if args.encoder_adaptation == "lora" and args.architecture != "token_gated":
         raise ValueError("LoRA encoder adaptation currently supports --architecture token_gated only")
+    if args.train_last_encoder_layers is not None and args.architecture != "token_gated":
+        raise ValueError("--train-last-encoder-layers requires --architecture token_gated")
     if args.monitor_metric is None:
         args.monitor_metric = "AUPRC" if args.run in {"window-diagnostic", "candidate-group-diagnostic", "source-study", "source-study-development", "human-study", "human-study-development", "clear-lactyl-development", "hybridkla-source", "hybridkla-source-development", "hybridkla-study", "hybridkla-study-development", "pcbert-revised", "pcbert-revised-development"} else "ACC"
 

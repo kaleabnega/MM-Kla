@@ -102,6 +102,18 @@ class HpcSlurmTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("Refusing to train outside a Slurm compute allocation", result.stderr)
 
+    def test_full_protbert_job_keeps_control_training_protocol(self):
+        runner = (HPC_DIR / "run_clear_development.sh").read_text()
+        job = HPC_DIR / "project_mmkla_full_protbert_clear.sbatch"
+        subprocess.run(["bash", "-n", str(job)], check=True)
+        self.assertIn("RUN_MODEL=token_gated_protbert_full30_last4", job.read_text())
+        self.assertIn("#SBATCH --partition=cvlab-a5000", job.read_text())
+        self.assertIn("#SBATCH --gres=gpu:1", job.read_text())
+        self.assertIn("--encoder-layers 30 --train-last-encoder-layers 4", runner)
+        self.assertIn("--head-learning-rate 1e-4", runner)
+        self.assertIn("--epochs 30 --patience 5 --batch-size 4", runner)
+        self.assertIn("--run clear-lactyl-development", runner)
+
 
 if __name__ == "__main__":
     unittest.main()

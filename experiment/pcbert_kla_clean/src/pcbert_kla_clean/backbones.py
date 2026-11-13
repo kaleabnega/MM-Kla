@@ -82,6 +82,20 @@ def set_encoder_trainable(encoder: nn.Module, trainable: bool) -> None:
         parameter.requires_grad = trainable
 
 
+def set_last_encoder_layers_trainable(encoder: nn.Module, count: int) -> None:
+    transformer_encoder = getattr(encoder, "encoder", None)
+    layers = getattr(transformer_encoder, "layer", None)
+    if layers is None:
+        layers = getattr(transformer_encoder, "block", None)
+    if layers is None or not 1 <= count <= len(layers):
+        raise ValueError("Trainable encoder layer count must be between 1 and retained depth")
+
+    set_encoder_trainable(encoder, trainable=False)
+    for layer in layers[-count:]:
+        for parameter in layer.parameters():
+            parameter.requires_grad = True
+
+
 def add_lora_to_encoder(
     encoder: nn.Module,
     rank: int,

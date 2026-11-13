@@ -10,6 +10,7 @@ from pcbert_kla_clean.backbones import (
     is_t5_like_model,
     load_encoder,
     set_encoder_trainable,
+    set_last_encoder_layers_trainable,
     truncate_encoder_layers,
 )
 
@@ -193,6 +194,7 @@ class TokenGatedPCBertKla(nn.Module):
         lora_rank: int = 8,
         lora_alpha: int = 32,
         lora_dropout: float = 0.3,
+        train_last_encoder_layers: int | None = None,
     ) -> None:
         super().__init__()
         if ablation not in {
@@ -211,6 +213,10 @@ class TokenGatedPCBertKla(nn.Module):
             raise ValueError(f"Unsupported encoder adaptation: {encoder_adaptation}")
         if encoder_adaptation == "lora" and (freeze_encoder or not self.uses_sequence):
             raise ValueError("LoRA requires an active, non-frozen sequence encoder")
+        if train_last_encoder_layers is not None and (
+            freeze_encoder or encoder_adaptation != "full" or not self.uses_sequence
+        ):
+            raise ValueError("Last-layer training requires an active encoder without LoRA or full freezing")
 
         if self.uses_sequence:
             self.encoder = load_encoder(model_name, cache_dir)
@@ -221,7 +227,10 @@ class TokenGatedPCBertKla(nn.Module):
                     self.encoder, lora_rank, lora_alpha, lora_dropout
                 )
             else:
-                set_encoder_trainable(self.encoder, trainable=not freeze_encoder)
+                if train_last_encoder_layers is None:
+                    set_encoder_trainable(self.encoder, trainable=not freeze_encoder)
+                else:
+                    set_last_encoder_layers_trainable(self.encoder, train_last_encoder_layers)
             self.site_attention = SiteAttentionPooling(
                 hidden_size=hidden_size,
                 attention_dim=attention_dim,

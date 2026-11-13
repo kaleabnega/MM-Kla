@@ -149,6 +149,7 @@ def build_model(args: Namespace, feature_dim: int, device: torch.device) -> nn.M
             lora_rank=getattr(args, "lora_rank", 8),
             lora_alpha=getattr(args, "lora_alpha", 32),
             lora_dropout=getattr(args, "lora_dropout", 0.3),
+            train_last_encoder_layers=getattr(args, "train_last_encoder_layers", None),
         )
     elif args.architecture == "token_gated_revised":
         if args.ablation != "none":
