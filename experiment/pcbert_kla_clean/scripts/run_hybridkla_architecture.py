@@ -346,9 +346,10 @@ def read_lock(lock_path: Path) -> tuple[dict[str, list[dict[str, str]]], dict]:
         return partitions, audit
 
     manifest = lock_path.with_name("model_manifest.csv")
+    clear_lock = audit.get("protocol", "").startswith("CLEAR-Lactyl protein-")
     human_lock = "holdout_pmid" in audit and "sampled_training_rows" in audit
-    study_lock = "output_sha256" in audit and not human_lock
-    expected_sha = (audit["output_sha256"]["model_manifest.csv"] if study_lock or human_lock
+    study_lock = "output_sha256" in audit and not human_lock and not clear_lock
+    expected_sha = (audit["output_sha256"]["model_manifest.csv"] if study_lock or human_lock or clear_lock
                     else audit["model_manifest_sha256"])
     if sha256(manifest) != expected_sha:
         raise ValueError("HybridKla source manifest does not match lock")
@@ -361,7 +362,7 @@ def read_lock(lock_path: Path) -> tuple[dict[str, list[dict[str, str]]], dict]:
         partition = row["partition"]
         if partition not in partitions:
             raise ValueError("Invalid source partition")
-        if human_lock:
+        if human_lock or clear_lock:
             row["group_id"] = row["homology_group"]
             row["source_site_id"] = f'{row["accession"]}:{row["position_1based"]}'
             identifier = row["accession"]
@@ -369,11 +370,14 @@ def read_lock(lock_path: Path) -> tuple[dict[str, list[dict[str, str]]], dict]:
                 raise ValueError("Invalid human lysine-centered window")
             if row["label"] not in {"0", "1"}:
                 raise ValueError("Invalid human label")
-            if partition == "external_test":
-                if row["label"] == "1" and row["source_pmids"] != audit["holdout_pmid"]:
-                    raise ValueError("External positive lacks exclusive held-out-study evidence")
-            elif audit["holdout_pmid"] in row["source_pmids"].split(";"):
-                raise ValueError("Held-out-study evidence leaked into human development")
+            if human_lock:
+                if partition == "external_test":
+                    if row["label"] == "1" and row["source_pmids"] != audit["holdout_pmid"]:
+                        raise ValueError("External positive lacks exclusive held-out-study evidence")
+                elif audit["holdout_pmid"] in row["source_pmids"].split(";"):
+                    raise ValueError("Held-out-study evidence leaked into human development")
+            elif partition == "external_test":
+                raise ValueError("CLEAR-Lactyl lock has no external-study partition")
         elif study_lock:
             expected = ("S7", "Mus musculus") if partition == "external_test" else (
                 "S1", "Homo sapiens")
@@ -395,7 +399,7 @@ def read_lock(lock_path: Path) -> tuple[dict[str, list[dict[str, str]]], dict]:
         windows.add(row["window_51aa"])
         partitions[partition].append(row)
     for name, group_rows in partitions.items():
-        if name == "external_test" and not study_lock and not human_lock:
+        if name == "external_test" and (clear_lock or not study_lock and not human_lock):
             continue
         expected = (audit["partitions_before_training_resampling"][name]
                     if study_lock or human_lock else audit["partitions"][name])

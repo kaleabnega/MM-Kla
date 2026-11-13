@@ -41,6 +41,8 @@ def parse_args() -> argparse.Namespace:
             "human-study-check",
             "human-study-development",
             "human-study",
+            "clear-lactyl-check",
+            "clear-lactyl-development",
             "hybridkla-source-check",
             "hybridkla-source-development",
             "hybridkla-source",
@@ -62,6 +64,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--human-lock", type=Path,
         default=PROJECT_DIR / "outputs/kladb_human_locked/split_audit.json",
+    )
+    parser.add_argument(
+        "--clear-lock", type=Path,
+        default=PROJECT_DIR / "outputs/clear_lactyl_locked/split_audit.json",
     )
     parser.add_argument(
         "--hybridkla-source-lock", type=Path,
@@ -228,7 +234,47 @@ def main() -> None:
     if args.encoder_adaptation == "lora" and args.architecture != "token_gated":
         raise ValueError("LoRA encoder adaptation currently supports --architecture token_gated only")
     if args.monitor_metric is None:
-        args.monitor_metric = "AUPRC" if args.run in {"window-diagnostic", "candidate-group-diagnostic", "source-study", "source-study-development", "human-study", "human-study-development", "hybridkla-source", "hybridkla-source-development", "hybridkla-study", "hybridkla-study-development", "pcbert-revised", "pcbert-revised-development"} else "ACC"
+        args.monitor_metric = "AUPRC" if args.run in {"window-diagnostic", "candidate-group-diagnostic", "source-study", "source-study-development", "human-study", "human-study-development", "clear-lactyl-development", "hybridkla-source", "hybridkla-source-development", "hybridkla-study", "hybridkla-study-development", "pcbert-revised", "pcbert-revised-development"} else "ACC"
+
+    if args.run in {"clear-lactyl-check", "clear-lactyl-development"}:
+        from pcbert_kla_clean.clear_lactyl import load_clear_lactyl
+        from pcbert_kla_clean.source_study import sha256
+
+        development, validation_indices, internal_test = load_clear_lactyl(args.clear_lock)
+        report = {
+            "training_rows": len(development.records) - len(validation_indices),
+            "validation_rows": len(validation_indices),
+            "internal_test_rows": len(internal_test.records),
+            "clear_lock_sha256": sha256(args.clear_lock),
+        }
+        print(json.dumps(report, indent=2, sort_keys=True))
+        if args.run == "clear-lactyl-check":
+            return
+        if args.calibrate_threshold != "none" or args.monitor_metric != "AUPRC":
+            raise ValueError("CLEAR-Lactyl development requires validation AUPRC without threshold calibration")
+        from pcbert_kla_clean.backbones import infer_site_token_index, load_tokenizer
+        from pcbert_kla_clean.experiments import train_and_predict_independent
+        import torch
+
+        if args.site_token_index is None:
+            args.site_token_index = infer_site_token_index(args.model_name)
+        args.device = resolve_device(args.device)
+        config = {
+            key: str(value) if isinstance(value, Path) else value
+            for key, value in vars(args).items() if key != "output_dir"
+        }
+        run_id = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:12]
+        output_dir = args.output_dir / "clear_lactyl" / "runs" / run_id
+        result = train_and_predict_independent(
+            args, development, None, seed=args.seed,
+            tokenizer=load_tokenizer(args.model_name, args.cache_dir),
+            device=torch.device(args.device), output_dir=output_dir,
+            fixed_validation_indices=validation_indices,
+        )
+        print("\nCLEAR-Lactyl validation (development only):")
+        print(json.dumps({"loss": result["validation_loss"],
+                          **result["validation_metrics"]}, indent=2))
+        return
 
     if args.run in {"pcbert-revised-check", "pcbert-revised-development", "pcbert-revised"}:
         from pcbert_kla_clean.pcbert_revised import load_pcbert_revised

@@ -112,3 +112,27 @@ The comparison may be queued with `--dependency=afterok:<ESM_JOB_ID>`. This
 starts it only after the full-epoch MM-Kla job succeeds. A single comparison
 job avoids a second GPU allocation, but if HybridKla-aligned fails, the
 completed PCBert-Kla results remain in its output directory.
+
+## CLEAR-Lactyl validation jobs
+
+`project_mmkla_clear.sbatch` trains the current ESM-2-650M LoRA token-gated
+MM-Kla model. `project_compare_clear.sbatch` trains the four-layer ProtBert
+PCBert-Kla baseline and then the eight-branch HybridKla-aligned model on one
+allocated GPU. Both jobs use the same protein/homology-grouped CLEAR-Lactyl
+training and validation partitions, seed 42 by default, and **do not score the
+held-out test**. The HybridKla runner is architecture-aligned, not an exact
+replication of the upstream training code; the provenance of the official
+AAindex `top10.txt` selection is not established.
+
+The two files in `outputs/clear_lactyl_locked/` required on the server are
+`split_audit.json` and `model_manifest.csv`; the submission script checks
+their pinned hashes. These are ignored by Git and must be transferred
+separately. The existing isolated `.venv-hpc-cu118` environment and official
+`HybridKla.bin` are reused. The jobs do not run training on the login node.
+
+Submit from this directory with `EXPECTED_COMMIT` set to the corresponding
+40-character commit and `RUN_SEED=42`. The Slurm jobs are named
+`project-mmkla-clear` and `project-compare-clear`. Results go to
+`outputs/hpc_clear_lactyl_development/<model>/seed_42/` and each job refuses
+to overwrite a pre-existing directory. No final test comparison should be
+claimed from these validation-only runs.
