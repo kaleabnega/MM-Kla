@@ -92,11 +92,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--architecture",
-        choices=["baseline", "token_gated", "token_gated_revised", "token_gated_conv_concat", "hybrid_gated"],
+        choices=["baseline", "token_gated", "token_gated_bilstm", "token_gated_revised", "token_gated_conv_concat", "hybrid_gated"],
         default="baseline",
         help=(
             "Model architecture. 'baseline' preserves PCBert-Kla; 'token_gated' "
             "uses site-aware token attention and gated physicochemical fusion; "
+            "'token_gated_bilstm' adds central-lysine raw-residue BiLSTM context; "
             "'token_gated_revised' adds K-centered convolutions of widths 3, 5, and 9; "
             "'token_gated_conv_concat' replaces its gate with concatenation fusion; "
             "'hybrid_gated' preserves CLS context and adds site-aware pooling."
@@ -113,6 +114,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--optimizer", choices=["sgd", "adamw"], default="sgd")
     parser.add_argument("--learning-rate", type=float, default=0.003)
+    parser.add_argument(
+        "--head-learning-rate", type=float, default=None,
+        help="Optional learning rate for non-encoder parameters; defaults to --learning-rate.",
+    )
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument(
         "--positive-weighting",
@@ -142,6 +147,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fusion-dim", type=int, default=256)
     parser.add_argument("--attention-dim", type=int, default=256)
     parser.add_argument("--arch-dropout", type=float, default=0.2)
+    parser.add_argument("--residue-embedding-dim", type=int, default=64)
+    parser.add_argument("--lstm-hidden-dim", type=int, default=64)
+    parser.add_argument("--lstm-layers", type=int, default=1)
     parser.add_argument(
         "--ablation",
         choices=["none", "no_gated_fusion", "no_physicochemical", "no_sequence"],

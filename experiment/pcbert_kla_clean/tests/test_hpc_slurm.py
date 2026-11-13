@@ -76,6 +76,32 @@ class HpcSlurmTests(unittest.TestCase):
             self.assertIn("checksum mismatch", result.stderr)
             self.assertFalse(output.exists())
 
+    def test_clear_bilstm_jobs_share_protocol_and_require_compute_allocation(self):
+        runner = HPC_DIR / "run_clear_development.sh"
+        source = runner.read_text()
+        self.assertIn("--run clear-lactyl-development", source)
+        self.assertIn("--head-learning-rate 1e-4", source)
+        self.assertIn("token_gated_protbert_bilstm", source)
+        self.assertIn("token_gated_protbert_head_lr", source)
+        subprocess.run(["bash", "-n", str(runner)], check=True)
+        for filename in (
+            "project_mmkla_bilstm_control.sbatch",
+            "project_mmkla_bilstm_clear.sbatch",
+        ):
+            path = HPC_DIR / filename
+            with self.subTest(job=filename):
+                subprocess.run(["bash", "-n", str(path)], check=True)
+                self.assertIn("#SBATCH --partition=cvlab-a5000", path.read_text())
+                self.assertIn("#SBATCH --gres=gpu:1", path.read_text())
+        environment = os.environ.copy()
+        for key in ("SLURM_JOB_ID", "SLURMD_NODENAME", "SLURM_JOB_PARTITION"):
+            environment.pop(key, None)
+        result = subprocess.run(
+            ["bash", str(runner)], capture_output=True, text=True, env=environment,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("Refusing to train outside a Slurm compute allocation", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

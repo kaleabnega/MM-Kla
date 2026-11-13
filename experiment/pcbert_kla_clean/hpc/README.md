@@ -153,3 +153,37 @@ Submit from this directory with `EXPECTED_COMMIT` set to the corresponding
 `outputs/hpc_clear_lactyl_development/<model>/seed_42/` and each job refuses
 to overwrite a pre-existing directory. No final test comparison should be
 claimed from these validation-only runs.
+
+## Central-lysine BiLSTM experiment
+
+`project_mmkla_bilstm_control.sbatch` reruns the existing four-layer ProtBERT
+token-gated MM-Kla model. `project_mmkla_bilstm_clear.sbatch` adds a separate
+one-layer, bidirectional 64-unit LSTM over learned 64-dimensional residue
+embeddings. Its central-lysine state is concatenated with the existing
+attention-pooled ProtBERT sequence vector before the 256-dimensional sequence
+projection. The 27-feature branch, gated fusion, and residual classifier are
+unchanged. The new branch does not use protein structures or test labels.
+
+Both jobs use the same CLEAR-Lactyl lock, seed, 30-epoch limit, early stopping,
+and AdamW schedule. ProtBERT parameters use `2e-5`; non-encoder parameters use
+`1e-4` in **both** jobs, so the new branch is the only intentional architectural
+difference. Because this learning-rate grouping differs from the earlier MM-Kla
+run, its old validation score is not the matched control. The jobs are
+validation-only and do not score the held-out test. Compare validation AUPRC
+first, then the other saved metrics; do not choose a model using the test set.
+
+Submit from this directory on the server after syncing the new commit and
+verifying that the locked data and isolated Python environment are present:
+
+```bash
+export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
+export RUN_SEED=42
+sbatch --export=ALL project_mmkla_bilstm_control.sbatch
+sbatch --export=ALL project_mmkla_bilstm_clear.sbatch
+```
+
+Results go to separate `token_gated_protbert_head_lr/seed_42/` and
+`token_gated_protbert_bilstm/seed_42/` directories under
+`outputs/hpc_clear_lactyl_development/`. Neither script pins a node or runs
+training without a Slurm compute allocation. Subsequent seeds should use the
+same code commit and lock; neither job resumes an interrupted run.

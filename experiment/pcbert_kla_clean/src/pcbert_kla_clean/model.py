@@ -262,6 +262,7 @@ class TokenGatedPCBertKla(nn.Module):
         self,
         token_embeddings: torch.Tensor,
         attention_mask: torch.Tensor,
+        input_ids: torch.Tensor | None = None,
     ) -> torch.Tensor:
         return self.site_attention(token_embeddings, attention_mask)
 
@@ -287,7 +288,7 @@ class TokenGatedPCBertKla(nn.Module):
                 self.freeze_encoder,
             )
             token_embeddings = outputs.last_hidden_state.to(features.dtype)
-            sequence_embedding = self.sequence_context(token_embeddings, attention_mask)
+            sequence_embedding = self.sequence_context(token_embeddings, attention_mask, input_ids)
             sequence_embedding = self.sequence_projection(sequence_embedding)
 
         if self.uses_features:
@@ -366,12 +367,89 @@ class TokenGatedRevisedPCBertKla(TokenGatedPCBertKla):
         self,
         token_embeddings: torch.Tensor,
         attention_mask: torch.Tensor,
+        input_ids: torch.Tensor | None = None,
     ) -> torch.Tensor:
         pooled = super().sequence_context(token_embeddings, attention_mask)
         site_index = min(self.site_attention.site_token_index, token_embeddings.shape[1] - 1)
         channels_first = token_embeddings.transpose(1, 2)
         local = [layer(channels_first)[:, :, site_index] for layer in self.local_filters]
         return torch.cat((pooled, *local), dim=1)
+
+
+class TokenGatedBiLSTMPCBertKla(TokenGatedPCBertKla):
+    """Add raw residue-order context at the target lysine to token-gated MM-Kla."""
+
+    def __init__(
+        self,
+        model_name: str = "Rostlab/prot_bert",
+        feature_dim: int = 27,
+        encoder_layers: int = 4,
+        fusion_dim: int = 256,
+        attention_dim: int = 256,
+        dropout: float = 0.2,
+        site_token_index: int = 26,
+        freeze_encoder: bool = False,
+        cache_dir: str | None = None,
+        residue_embedding_dim: int = 64,
+        lstm_hidden_dim: int = 64,
+        lstm_layers: int = 1,
+    ) -> None:
+        if min(residue_embedding_dim, lstm_hidden_dim, lstm_layers) < 1:
+            raise ValueError("BiLSTM dimensions and layer count must be positive")
+        super().__init__(
+            model_name=model_name,
+            feature_dim=feature_dim,
+            encoder_layers=encoder_layers,
+            fusion_dim=fusion_dim,
+            attention_dim=attention_dim,
+            dropout=dropout,
+            site_token_index=site_token_index,
+            freeze_encoder=freeze_encoder,
+            ablation="none",
+            cache_dir=cache_dir,
+        )
+        input_embedding = self.encoder.get_input_embeddings()
+        self.residue_embedding = nn.Embedding(input_embedding.num_embeddings, residue_embedding_dim)
+        self.residue_lstm = nn.LSTM(
+            residue_embedding_dim,
+            lstm_hidden_dim,
+            num_layers=lstm_layers,
+            batch_first=True,
+            bidirectional=True,
+            dropout=dropout if lstm_layers > 1 else 0.0,
+        )
+        hidden_size = encoder_hidden_size(self.encoder)
+        self.sequence_projection = nn.Sequential(
+            nn.LayerNorm(hidden_size + 2 * lstm_hidden_dim),
+            nn.Linear(hidden_size + 2 * lstm_hidden_dim, fusion_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+        )
+
+    def sequence_context(
+        self,
+        token_embeddings: torch.Tensor,
+        attention_mask: torch.Tensor,
+        input_ids: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        if input_ids is None:
+            raise ValueError("The BiLSTM branch requires amino-acid token IDs")
+        pooled = super().sequence_context(token_embeddings, attention_mask, input_ids)
+        start_offset = int(self.site_attention.has_start_token)
+        site_index = self.site_attention.site_token_index - start_offset
+        residue_lengths = attention_mask.long().sum(dim=1) - start_offset - 1
+        if site_index < 0 or torch.any(residue_lengths <= site_index):
+            raise ValueError("The target lysine is outside the untruncated residue window")
+        residues = self.residue_embedding(input_ids[:, start_offset:])
+        packed = nn.utils.rnn.pack_padded_sequence(
+            residues, residue_lengths.cpu(), batch_first=True, enforce_sorted=False
+        )
+        packed_output, _ = self.residue_lstm(packed)
+        recurrent, _ = nn.utils.rnn.pad_packed_sequence(
+            packed_output, batch_first=True, total_length=residues.shape[1]
+        )
+        central = recurrent[:, site_index, :]
+        return torch.cat((pooled, central), dim=1)
 
 
 class TokenGatedConvConcatPCBertKla(TokenGatedRevisedPCBertKla):

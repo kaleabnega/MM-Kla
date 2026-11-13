@@ -14,13 +14,13 @@ VENV_DIR="${VENV_DIR:-${REPO_DIR}/../.venv-hpc-cu118}"
 LOCK_DIR="${LOCK_DIR:-${PROJECT_DIR}/outputs/clear_lactyl_locked}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_DIR}/outputs/hpc_clear_lactyl_development}"
 HYBRID_ARCHIVE="${HYBRID_ARCHIVE:-${REPO_DIR}/../HybridKla.bin}"
-RUN_MODEL="${RUN_MODEL:?Set RUN_MODEL to baseline, token_gated, token_gated_protbert, token_gated_protbert_sgd, token_gated_protbert_adamw, or hybridkla_architecture_aligned}"
+RUN_MODEL="${RUN_MODEL:?Set RUN_MODEL to a supported CLEAR-Lactyl model}"
 RUN_SEED="${RUN_SEED:?Set RUN_SEED to a nonnegative integer}"
 EXPECTED_COMMIT="${EXPECTED_COMMIT:?Set EXPECTED_COMMIT to the full repository commit}"
 RUN_DIR="${OUTPUT_ROOT}/${RUN_MODEL}/seed_${RUN_SEED}"
 
 case "${RUN_MODEL}" in
-    baseline|token_gated|token_gated_protbert|token_gated_protbert_sgd|token_gated_protbert_adamw|hybridkla_architecture_aligned) ;;
+    baseline|token_gated|token_gated_protbert|token_gated_protbert_sgd|token_gated_protbert_adamw|token_gated_protbert_head_lr|token_gated_protbert_bilstm|hybridkla_architecture_aligned) ;;
     *) echo "Unsupported model: ${RUN_MODEL}" >&2; exit 2 ;;
 esac
 if [[ ! "${RUN_SEED}" =~ ^[0-9]+$ || ! "${EXPECTED_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
@@ -81,11 +81,16 @@ else
         model_args=(--model-name facebook/esm2_t33_650M_UR50D \
             --encoder-layers 33 --encoder-adaptation lora \
             --lora-rank 8 --lora-alpha 32 --lora-dropout 0.3)
-    elif [[ "${RUN_MODEL}" == token_gated_protbert || "${RUN_MODEL}" == token_gated_protbert_sgd || "${RUN_MODEL}" == token_gated_protbert_adamw ]]; then
+    elif [[ "${RUN_MODEL}" == token_gated_protbert_bilstm ]]; then
+        architecture=token_gated_bilstm
+        optimizer_args+=(--head-learning-rate 1e-4)
+    elif [[ "${RUN_MODEL}" == token_gated_protbert || "${RUN_MODEL}" == token_gated_protbert_sgd || "${RUN_MODEL}" == token_gated_protbert_adamw || "${RUN_MODEL}" == token_gated_protbert_head_lr ]]; then
         architecture=token_gated
         if [[ "${RUN_MODEL}" == token_gated_protbert_sgd ]]; then
             optimizer_args=(--optimizer sgd --learning-rate 0.003
                 --weight-decay 0 --scheduler none)
+        elif [[ "${RUN_MODEL}" == token_gated_protbert_head_lr ]]; then
+            optimizer_args+=(--head-learning-rate 1e-4)
         fi
     fi
     "${PYTHON}" -u "${PROJECT_DIR}/scripts/run_replication.py" \

@@ -14,6 +14,7 @@ from pcbert_kla_clean.model import (
     HybridTokenGatedPCBertKla,
     PCBertKla,
     TokenGatedConvConcatPCBertKla,
+    TokenGatedBiLSTMPCBertKla,
     TokenGatedPCBertKla,
     TokenGatedRevisedPCBertKla,
 )
@@ -163,6 +164,23 @@ def build_model(args: Namespace, feature_dim: int, device: torch.device) -> nn.M
             freeze_encoder=args.freeze_encoder,
             cache_dir=args.cache_dir,
         )
+    elif args.architecture == "token_gated_bilstm":
+        if args.ablation != "none":
+            raise ValueError("The BiLSTM model does not support --ablation")
+        model = TokenGatedBiLSTMPCBertKla(
+            model_name=args.model_name,
+            feature_dim=feature_dim,
+            encoder_layers=args.encoder_layers,
+            fusion_dim=args.fusion_dim,
+            attention_dim=args.attention_dim,
+            dropout=args.arch_dropout,
+            site_token_index=args.site_token_index,
+            freeze_encoder=args.freeze_encoder,
+            cache_dir=args.cache_dir,
+            residue_embedding_dim=args.residue_embedding_dim,
+            lstm_hidden_dim=args.lstm_hidden_dim,
+            lstm_layers=args.lstm_layers,
+        )
     elif args.architecture == "token_gated_conv_concat":
         if args.ablation != "none":
             raise ValueError("The convolution-concatenation model does not support --ablation")
@@ -201,16 +219,36 @@ def build_optimizer(args: Namespace, model: nn.Module):
     if not trainable_parameters:
         raise ValueError("No trainable parameters; check --freeze-encoder and architecture")
 
+    head_learning_rate = getattr(args, "head_learning_rate", None)
+    if head_learning_rate is not None:
+        if head_learning_rate <= 0:
+            raise ValueError("--head-learning-rate must be positive")
+        encoder_parameters = [
+            parameter for name, parameter in model.named_parameters()
+            if name.startswith("encoder.") and parameter.requires_grad
+        ]
+        head_parameters = [
+            parameter for name, parameter in model.named_parameters()
+            if not name.startswith("encoder.") and parameter.requires_grad
+        ]
+        parameter_groups = []
+        if encoder_parameters:
+            parameter_groups.append({"params": encoder_parameters, "lr": args.learning_rate})
+        if head_parameters:
+            parameter_groups.append({"params": head_parameters, "lr": head_learning_rate})
+    else:
+        parameter_groups = trainable_parameters
+
     if args.optimizer == "sgd":
         return torch.optim.SGD(
-            trainable_parameters,
+            parameter_groups,
             lr=args.learning_rate,
             momentum=args.sgd_momentum,
             weight_decay=args.weight_decay,
         )
     if args.optimizer == "adamw":
         return torch.optim.AdamW(
-            trainable_parameters,
+            parameter_groups,
             lr=args.learning_rate,
             betas=(args.adam_beta1, args.adam_beta2),
             eps=args.adam_epsilon,
