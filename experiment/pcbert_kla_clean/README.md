@@ -189,6 +189,10 @@ sites and a UniProt reference proteome, is documented in
 [kladb_human_v1](review_data/kladb_human_v1/README.md). The same locked manifest
 is used for both PCBert-Kla and token-gated comparisons. Source downloads and
 generated manifests are local artifacts and are not committed.
+The separately prepared [CLEAR-Lactyl benchmark](review_data/clear_lactyl_v1/README.md)
+uses the AttentionKla authors' site table, reference-verified accessions, and
+protein/homology-grouped train, validation, and internal test partitions. It
+has not yet been used for model training or evaluation in this repository.
 The [HybridKla reproduction audit](review_data/hybridkla_v1/README.md) records
 the upstream training dependencies, exact overlap with the locked tests, and
 a split-preserving export. Section 9 of the Kaggle human notebook can run the
