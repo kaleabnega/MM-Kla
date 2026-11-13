@@ -9,13 +9,18 @@ from pathlib import Path
 import numpy as np
 
 from pcbert_kla_clean.data import KlaRecord, KlaSplit
-from pcbert_kla_clean.features import AMINO_ACIDS, FEATURE_NAMES, calculate_features
+from pcbert_kla_clean.features import (
+    AMINO_ACIDS, FEATURE_NAMES, calculate_cksaap_features,
+    calculate_features, cksaap_feature_names,
+)
 
 
 PARTITIONS = ("train", "validation", "internal_test")
 
 
-def load_clear_lactyl(lock_path: Path) -> tuple[KlaSplit, np.ndarray, KlaSplit]:
+def load_clear_lactyl(
+    lock_path: Path, add_cksaap: bool = False,
+) -> tuple[KlaSplit, np.ndarray, KlaSplit]:
     audit = json.loads(lock_path.read_text())
     if not audit.get("protocol", "").startswith("CLEAR-Lactyl protein-"):
         raise ValueError("Not a CLEAR-Lactyl split audit")
@@ -56,13 +61,19 @@ def load_clear_lactyl(lock_path: Path) -> tuple[KlaSplit, np.ndarray, KlaSplit]:
             raise ValueError(f"CLEAR-Lactyl {name} counts differ from split audit")
 
     def make_split(group_rows: list[dict[str, str]]) -> KlaSplit:
+        sequences = [row["window_51aa"] for row in group_rows]
+        features = np.stack([calculate_features(sequence) for sequence in sequences])
+        feature_names = list(FEATURE_NAMES)
+        if add_cksaap:
+            features = np.concatenate([features, calculate_cksaap_features(sequences)], axis=1)
+            feature_names.extend(cksaap_feature_names())
         return KlaSplit(
             records=[KlaRecord(
                 name=row["accession"], position=int(row["position_1based"]),
                 label=int(row["label"]), sequence=row["window_51aa"],
             ) for row in group_rows],
-            feature_names=FEATURE_NAMES,
-            features=np.stack([calculate_features(row["window_51aa"]) for row in group_rows]),
+            feature_names=feature_names,
+            features=features,
         )
 
     development = make_split(partitions["train"] + partitions["validation"])

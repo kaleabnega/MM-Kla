@@ -6,6 +6,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import numpy as np
+
+from pcbert_kla_clean.features import calculate_cksaap_features, cksaap_feature_names
+
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -14,6 +18,25 @@ from prepare_clear_lactyl import prepare  # noqa: E402
 
 
 class ClearLactylTests(unittest.TestCase):
+    def test_cksaap_uses_ordered_pairs_at_four_fixed_spacings(self) -> None:
+        sequence = "A" * 25 + "K" + "A" * 25
+        features = calculate_cksaap_features([sequence, sequence])
+        names = cksaap_feature_names()
+        self.assertEqual(features.shape, (2, 1600))
+        self.assertEqual(len(names), 1600)
+        self.assertTrue(np.array_equal(features[0], features[1]))
+        for gap in range(4):
+            self.assertAlmostEqual(float(features[0, gap * 400:(gap + 1) * 400].sum()), 1)
+        self.assertAlmostEqual(float(features[0, names.index("CKSAAP_k0_AA")]), 48 / 50)
+        self.assertAlmostEqual(float(features[0, names.index("CKSAAP_k0_AK")]), 1 / 50)
+        self.assertAlmostEqual(float(features[0, names.index("CKSAAP_k0_KA")]), 1 / 50)
+        self.assertNotEqual(
+            float(features[0, names.index("CKSAAP_k0_AA")]),
+            float(features[0, names.index("CKSAAP_k1_AA")]),
+        )
+        with self.assertRaisesRegex(ValueError, "canonical"):
+            calculate_cksaap_features(["X" + sequence[1:]])
+
     def test_preparation_filters_unverifiable_and_known_positive_negatives(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             base = Path(temp)

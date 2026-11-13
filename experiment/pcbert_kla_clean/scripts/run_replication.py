@@ -133,6 +133,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-ratio", type=float, default=0.0)
     parser.add_argument("--encoder-layers", type=int, default=4)
     parser.add_argument(
+        "--add-cksaap", action="store_true",
+        help="Add normalized CKSAAP gaps 0-3 to the 27 CLEAR-Lactyl sequence descriptors.",
+    )
+    parser.add_argument(
         "--train-last-encoder-layers", type=int, default=None,
         help="Keep --encoder-layers pretrained layers, but update only the last N; token_gated only.",
     )
@@ -247,6 +251,8 @@ def main() -> None:
         raise ValueError("LoRA encoder adaptation currently supports --architecture token_gated only")
     if args.train_last_encoder_layers is not None and args.architecture != "token_gated":
         raise ValueError("--train-last-encoder-layers requires --architecture token_gated")
+    if args.add_cksaap and args.run not in {"clear-lactyl-check", "clear-lactyl-development"}:
+        raise ValueError("--add-cksaap currently supports CLEAR-Lactyl runs only")
     if args.monitor_metric is None:
         args.monitor_metric = "AUPRC" if args.run in {"window-diagnostic", "candidate-group-diagnostic", "source-study", "source-study-development", "human-study", "human-study-development", "clear-lactyl-development", "hybridkla-source", "hybridkla-source-development", "hybridkla-study", "hybridkla-study-development", "pcbert-revised", "pcbert-revised-development"} else "ACC"
 
@@ -254,11 +260,14 @@ def main() -> None:
         from pcbert_kla_clean.clear_lactyl import load_clear_lactyl
         from pcbert_kla_clean.source_study import sha256
 
-        development, validation_indices, internal_test = load_clear_lactyl(args.clear_lock)
+        development, validation_indices, internal_test = load_clear_lactyl(
+            args.clear_lock, add_cksaap=args.add_cksaap,
+        )
         report = {
             "training_rows": len(development.records) - len(validation_indices),
             "validation_rows": len(validation_indices),
             "internal_test_rows": len(internal_test.records),
+            "feature_dim": development.features.shape[1],
             "clear_lock_sha256": sha256(args.clear_lock),
         }
         print(json.dumps(report, indent=2, sort_keys=True))

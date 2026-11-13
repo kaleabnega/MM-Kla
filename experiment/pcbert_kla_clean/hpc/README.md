@@ -210,3 +210,24 @@ sbatch --export=ALL project_mmkla_full_protbert_clear.sbatch
 
 Results are written to
 `outputs/hpc_clear_lactyl_development/token_gated_protbert_full30_last4/seed_42/`.
+
+### Four-layer ProtBERT with multi-gap CKSAAP
+
+`project_mmkla_cksaap_clear.sbatch` extends the 27 sequence-derived features
+of `project_mmkla_bilstm_control.sbatch` with 1,600 normalized, ordered
+amino-acid-pair frequencies: 400 each at gaps `k=0,1,2,3`. The same four
+retained and trainable ProtBERT layers, token-gated architecture, AdamW rate
+groups (`2e-5` encoder, `1e-4` head), locked CLEAR-Lactyl split, batch size,
+seed, 30-epoch limit, and validation-AUPRC selection are used. Feature scaling
+is fitted on the training partition only. The held-out test is not scored.
+
+Submit from the HPC directory after syncing the commit:
+
+```bash
+export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
+export RUN_SEED=42
+sbatch --export=ALL project_mmkla_cksaap_clear.sbatch
+```
+
+Results are written to
+`outputs/hpc_clear_lactyl_development/token_gated_protbert_cksaap/seed_42/`.
