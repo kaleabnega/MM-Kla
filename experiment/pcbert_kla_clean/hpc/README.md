@@ -134,6 +134,13 @@ and fixed 0.5 threshold. The ESM-2 run differs in encoder depth and adaptation
 method as well as optimizer, so the comparison does not isolate backbone
 identity alone.
 
+`project_mmkla_protbert_adamw_clear.sbatch` uses the same four-layer ProtBert
+token-gated model, split, seed, batch size, and early-stopping rule as the SGD
+job. It applies AdamW (learning rate 2e-5, weight decay 0.01, linear schedule
+with 10% warmup) and writes to `token_gated_protbert_adamw/seed_42/`. This is
+a comparison of optimizer configurations, not of the optimizer algorithms
+alone, because learning rate, weight decay, and scheduling also differ.
+
 The two files in `outputs/clear_lactyl_locked/` required on the server are
 `split_audit.json` and `model_manifest.csv`; the submission script checks
 their pinned hashes. These are ignored by Git and must be transferred
