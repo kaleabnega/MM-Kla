@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=project-mmkla-protbert-clear
+#SBATCH --job-name=project-mmkla-sgd-clear
 #SBATCH --partition=cvlab-a5000
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -12,4 +12,4 @@
 set -euo pipefail
 HPC_DIR="$(pwd -P)"
 [[ -f "${HPC_DIR}/run_clear_development.sh" ]] || { echo "Submit from the hpc directory." >&2; exit 2; }
-RUN_MODEL=token_gated_protbert bash "${HPC_DIR}/run_clear_development.sh"
+RUN_MODEL=token_gated_protbert_sgd bash "${HPC_DIR}/run_clear_development.sh"

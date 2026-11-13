@@ -125,12 +125,14 @@ replication of the upstream training code; the provenance of the official
 AAindex `top10.txt` selection is not established.
 
 `project_mmkla_protbert_clear.sbatch` runs the token-gated architecture with
-four fine-tuned ProtBert layers on the same locked split and AdamW training
-protocol. It writes to `token_gated_protbert/seed_42/`, leaving the ESM-2
-results intact. This reproduces the earlier backbone/architecture combination,
-but not the historical SGD optimizer configuration; it also differs from the
-ESM-2 run in encoder depth and adaptation method, so the comparison does not
-isolate backbone identity alone.
+four fine-tuned ProtBert layers and the earlier SGD settings (learning rate
+0.003, zero weight decay, no scheduler). It writes to
+`token_gated_protbert_sgd/seed_42/`, leaving the ESM-2 results and any
+incomplete AdamW run intact. It uses the same CLEAR-Lactyl training and
+validation partitions, maximum 30 epochs, validation-AUPRC early stopping,
+and fixed 0.5 threshold. The ESM-2 run differs in encoder depth and adaptation
+method as well as optimizer, so the comparison does not isolate backbone
+identity alone.
 
 The two files in `outputs/clear_lactyl_locked/` required on the server are
 `split_audit.json` and `model_manifest.csv`; the submission script checks
