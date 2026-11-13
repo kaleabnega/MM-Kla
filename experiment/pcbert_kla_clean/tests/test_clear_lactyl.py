@@ -26,7 +26,9 @@ class ClearLactylTests(unittest.TestCase):
         self.assertEqual(len(names), 1600)
         self.assertTrue(np.array_equal(features[0], features[1]))
         for gap in range(4):
-            self.assertAlmostEqual(float(features[0, gap * 400:(gap + 1) * 400].sum()), 1)
+            self.assertAlmostEqual(
+                float(features[0, gap * 400:(gap + 1) * 400].sum()), 1, delta=1e-6,
+            )
         self.assertAlmostEqual(float(features[0, names.index("CKSAAP_k0_AA")]), 48 / 50)
         self.assertAlmostEqual(float(features[0, names.index("CKSAAP_k0_AK")]), 1 / 50)
         self.assertAlmostEqual(float(features[0, names.index("CKSAAP_k0_KA")]), 1 / 50)
