@@ -6,6 +6,7 @@ import torch
 from torch import nn
 
 from pcbert_kla_clean.model import TokenGatedPCBertKla
+from pcbert_kla_clean.backbones import infer_sequence_format, infer_site_token_index
 
 
 class TinyEncoder(nn.Module):
@@ -67,6 +68,18 @@ class PartialEncoderFinetuningTests(unittest.TestCase):
         with patch("pcbert_kla_clean.model.load_encoder", return_value=TinyEncoder()):
             model = TokenGatedPCBertKla(encoder_layers=4)
         self.assertEqual(len(model.encoder.encoder.layer), 4)
+        self.assertTrue(all(parameter.requires_grad for parameter in model.encoder.parameters()))
+
+    def test_esm2_full_depth_uses_raw_sequence_and_trains_every_layer(self):
+        name = "facebook/esm2_t30_150M_UR50D"
+        self.assertEqual(infer_sequence_format(name), "raw")
+        self.assertEqual(infer_site_token_index(name), 26)
+        with patch("pcbert_kla_clean.model.load_encoder", return_value=TinyEncoder()):
+            model = TokenGatedPCBertKla(
+                model_name=name, encoder_layers=6,
+                fusion_dim=16, attention_dim=8,
+            )
+        self.assertEqual(len(model.encoder.encoder.layer), 6)
         self.assertTrue(all(parameter.requires_grad for parameter in model.encoder.parameters()))
 
 

@@ -262,5 +262,29 @@ Results have distinct `token_gated_protbert_full30_all/seed_42/` and
 `outputs/hpc_clear_lactyl_development/`. Each job requires a Slurm compute
 allocation and refuses an existing run directory.
 
+### Full-depth ESM-2 150M backbone
+
+`project_mmkla_esm2_150m_full30_clear.sbatch` replaces the ProtBERT backbone
+of the full-depth token-gated model with `facebook/esm2_t30_150M_UR50D`.
+All 30 ESM-2 layers and the unchanged MM-Kla head are trainable; neither LoRA
+nor layer freezing is used. ESM-2 receives unspaced amino-acid windows. The
+27 descriptors, site-guided attention, 256-dimensional gated fusion, and
+residual classifier are unchanged. CKSAAP is not included.
+
+The job uses the same CLEAR-Lactyl lock and seed-42 protocol as
+`token_gated_protbert_full30_all`: batch size 4, AdamW (`2e-5` encoder,
+`1e-4` head), weight decay 0.01, linear schedule with 10% warmup, at most 30
+epochs, patience 5, and validation AUPRC for checkpoint selection. The
+held-out test is not evaluated. Submit after syncing the commit:
+
+```bash
+export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
+export RUN_SEED=42
+sbatch --export=ALL project_mmkla_esm2_150m_full30_clear.sbatch
+```
+
+The separate output directory is
+`outputs/hpc_clear_lactyl_development/token_gated_esm2_150m_full30/seed_42/`.
+
 Results are written to
 `outputs/hpc_clear_lactyl_development/token_gated_protbert_cksaap/seed_42/`.
