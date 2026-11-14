@@ -20,7 +20,7 @@ EXPECTED_COMMIT="${EXPECTED_COMMIT:?Set EXPECTED_COMMIT to the full repository c
 RUN_DIR="${OUTPUT_ROOT}/${RUN_MODEL}/seed_${RUN_SEED}"
 
 case "${RUN_MODEL}" in
-    baseline|token_gated|token_gated_esm2_150m_full30|token_gated_protbert|token_gated_protbert_sgd|token_gated_protbert_adamw|token_gated_protbert_head_lr|token_gated_protbert_cksaap|token_gated_protbert_cksaap_projection|token_gated_protbert_full30_last4|token_gated_protbert_full30_all|token_gated_protbert_bilstm|mmkla_positional_stack|mmkla_contextual_positional_stack|hybridkla_architecture_aligned) ;;
+    baseline|token_gated|token_gated_esm2_150m_full30|token_gated_protbert|token_gated_protbert_sgd|token_gated_protbert_adamw|token_gated_protbert_head_lr|token_gated_protbert_cksaap|token_gated_protbert_cksaap_projection|token_gated_protbert_full30_last4|token_gated_protbert_full30_all|token_gated_protbert_bilstm|mmkla_positional_stack|mmkla_contextual_positional_stack|mmkla_no_27_descriptors_stack|hybridkla_architecture_aligned) ;;
     *) echo "Unsupported model: ${RUN_MODEL}" >&2; exit 2 ;;
 esac
 if [[ ! "${RUN_SEED}" =~ ^[0-9]+$ || ! "${EXPECTED_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
@@ -60,6 +60,13 @@ if [[ "${RUN_MODEL}" == mmkla_contextual_positional_stack ]]; then
         exit 2
     }
 fi
+if [[ "${RUN_MODEL}" == mmkla_no_27_descriptors_stack ]]; then
+    REFERENCE_DIR="${REFERENCE_DIR:-${OUTPUT_ROOT}/mmkla_contextual_positional_stack/seed_${RUN_SEED}/results}"
+    [[ -f "${REFERENCE_DIR}/report.json" && -f "${REFERENCE_DIR}/oof_contextual_scores.npz" && -f "${REFERENCE_DIR}/validation_predictions.csv" ]] || {
+        echo "Completed contextual reference artifacts are required: ${REFERENCE_DIR}" >&2
+        exit 2
+    }
+fi
 
 mkdir -p "${RUN_DIR}"
 printf 'job_id=%s\nnode=%s\nmodel=%s\nseed=%s\ncommit=%s\nlock_sha256=%s\n' \
@@ -75,6 +82,11 @@ if [[ "${RUN_MODEL}" == mmkla_positional_stack ]]; then
         --device cuda:0 --seed "${RUN_SEED}" --epochs 30 --patience 5
 elif [[ "${RUN_MODEL}" == mmkla_contextual_positional_stack ]]; then
     "${PYTHON}" -u "${PROJECT_DIR}/scripts/run_clear_contextual_positional.py" \
+        --clear-lock "${LOCK}" --reference-dir "${REFERENCE_DIR}" \
+        --output-dir "${RUN_DIR}/results" --device cuda:0 \
+        --seed "${RUN_SEED}" --epochs 30 --patience 5
+elif [[ "${RUN_MODEL}" == mmkla_no_27_descriptors_stack ]]; then
+    "${PYTHON}" -u "${PROJECT_DIR}/scripts/run_clear_no_descriptors.py" \
         --clear-lock "${LOCK}" --reference-dir "${REFERENCE_DIR}" \
         --output-dir "${RUN_DIR}/results" --device cuda:0 \
         --seed "${RUN_SEED}" --epochs 30 --patience 5

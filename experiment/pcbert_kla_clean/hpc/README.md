@@ -351,5 +351,31 @@ The default reference is
 Only the CLEAR-Lactyl training and validation partitions are used. The
 validation results are development evidence, not independent-test performance.
 
+### No-physicochemical-descriptors stack ablation
+
+`project_mmkla_no_27_descriptors_clear.sbatch` removes the 27 handcrafted
+physicochemical and composition descriptors from the fine-tuned, four-layer
+ProtBERT predictor while retaining its CKSAAP gap-0-to-3 features. It reuses
+the frozen contextual positional predictor from the completed seed-matched
+contextual stack. Five protein-grouped outer folds and inner grouped epoch
+selection retrain only the changed ProtBERT predictor. A new logistic combiner
+is fitted on training-only out-of-fold scores from the two predictors. This
+ablation does not retrain or score the held-out test partition.
+
+Submit from the HPC directory after syncing the code commit:
+
+```bash
+export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
+export RUN_SEED=42
+sbatch --export=ALL project_mmkla_no_27_descriptors_clear.sbatch
+```
+
+The reference directory defaults to
+`outputs/hpc_clear_lactyl_development/mmkla_contextual_positional_stack/seed_42/results/`.
+Results are written to
+`outputs/hpc_clear_lactyl_development/mmkla_no_27_descriptors_stack/seed_42/results/`.
+The validation report includes the full-stack, contextual-only, ablated
+ProtBERT-only, and ablated-stack metrics for comparison.
+
 Results are written to
 `outputs/hpc_clear_lactyl_development/token_gated_protbert_cksaap/seed_42/`.
