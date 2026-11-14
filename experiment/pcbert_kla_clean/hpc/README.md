@@ -377,5 +377,32 @@ Results are written to
 The validation report includes the full-stack, contextual-only, ablated
 ProtBERT-only, and ablated-stack metrics for comparison.
 
+### Contextual predictor plus 27 descriptors
+
+`project_mmkla_contextual_descriptors_clear.sbatch` tests whether the 27
+sequence-derived physicochemical and composition descriptors improve the
+contextual positional predictor directly. The contextual predictor's
+seed-matched out-of-fold and validation scores are reused unchanged. A small
+27-to-64-to-1 MLP is fitted on the descriptors alone, with scaling fitted on
+each training fold. Five protein-grouped outer folds produce descriptor
+out-of-fold scores; inner grouped folds select the epoch by AUPRC. Logistic
+regression combines the two predictors using training-only out-of-fold
+scores. Validation results include contextual-only, descriptors-only, their
+combination, and the previous full two-predictor stack. No held-out test
+partition is scored.
+
+Submit from the HPC directory after syncing the code commit:
+
+```bash
+export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
+export RUN_SEED=42
+sbatch --export=ALL project_mmkla_contextual_descriptors_clear.sbatch
+```
+
+The default reference is
+`outputs/hpc_clear_lactyl_development/mmkla_contextual_positional_stack/seed_42/results/`.
+New results are written to
+`outputs/hpc_clear_lactyl_development/mmkla_contextual_descriptors/seed_42/results/`.
+
 Results are written to
 `outputs/hpc_clear_lactyl_development/token_gated_protbert_cksaap/seed_42/`.
