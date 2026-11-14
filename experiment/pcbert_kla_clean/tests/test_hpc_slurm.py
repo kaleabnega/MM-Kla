@@ -159,6 +159,17 @@ class HpcSlurmTests(unittest.TestCase):
         self.assertIn("--monitor-metric AUPRC", runner)
         self.assertIn("--epochs 30 --patience 5 --batch-size 4", runner)
 
+    def test_positional_stack_job_stays_on_compute_node_and_validation(self):
+        runner = (HPC_DIR / "run_clear_development.sh").read_text()
+        job = HPC_DIR / "project_mmkla_positional_stack_clear.sbatch"
+        subprocess.run(["bash", "-n", str(job)], check=True)
+        self.assertIn("RUN_MODEL=mmkla_positional_stack", job.read_text())
+        self.assertIn("#SBATCH --partition=cvlab-a5000", job.read_text())
+        self.assertIn("#SBATCH --gres=gpu:1", job.read_text())
+        self.assertIn("SLURMD_NODENAME", runner)
+        self.assertIn("scripts/run_clear_stacked.py", runner)
+        self.assertIn("--epochs 30 --patience 5", runner)
+
 
 if __name__ == "__main__":
     unittest.main()

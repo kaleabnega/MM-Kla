@@ -286,5 +286,34 @@ sbatch --export=ALL project_mmkla_esm2_150m_full30_clear.sbatch
 The separate output directory is
 `outputs/hpc_clear_lactyl_development/token_gated_esm2_150m_full30/seed_42/`.
 
+### Two-branch positional sequence experiment
+
+`project_mmkla_positional_stack_clear.sbatch` tests a two-branch development
+model on the locked CLEAR-Lactyl split. The first branch is the existing
+four-layer ProtBERT token-gated model with 27 descriptors and CKSAAP gaps 0-3.
+The second branch independently encodes the same 51-residue windows with
+residue and position embeddings, a two-layer bidirectional LSTM, and
+central-lysine-guided attention. This is an architecture experiment, not a
+reproduction of HybridKla.
+
+Five stratified homology-group folds produce out-of-fold training scores for
+both branches. Within each outer fold, checkpoint epochs are chosen on a
+separate training-only grouped fold, then each branch is refitted on the
+outer training groups. A fixed logistic regression is fitted on the two
+out-of-fold scores. Validation scores are averages from the five outer-fold
+models; the report gives both branches, their unweighted mean, and the
+logistic combination separately. The internal test is not scored.
+
+Submit from the HPC directory after syncing the commit:
+
+```bash
+export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
+export RUN_SEED=42
+sbatch --export=ALL project_mmkla_positional_stack_clear.sbatch
+```
+
+The report, out-of-fold scores, and validation predictions are written to
+`outputs/hpc_clear_lactyl_development/mmkla_positional_stack/seed_42/results/`.
+
 Results are written to
 `outputs/hpc_clear_lactyl_development/token_gated_protbert_cksaap/seed_42/`.
