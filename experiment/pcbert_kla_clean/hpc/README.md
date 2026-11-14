@@ -315,5 +315,41 @@ sbatch --export=ALL project_mmkla_positional_stack_clear.sbatch
 The report, out-of-fold scores, and validation predictions are written to
 `outputs/hpc_clear_lactyl_development/mmkla_positional_stack/seed_42/results/`.
 
+### ProtBERT-contextual positional experiment
+
+`project_mmkla_contextual_positional_clear.sbatch` tests a contextual version
+of the positional predictor. It computes per-residue embeddings once from
+the complete, pretrained 30-layer `Rostlab/prot_bert` encoder in inference
+mode. The encoder stays frozen. A trainable 1024-to-64 projection adds these
+embeddings to the existing learned residue and position embeddings; the
+two-layer BiLSTM, site-guided attention, classifier, optimizer, and grouped
+training protocol are otherwise unchanged. This differs from the separate
+four-layer **fine-tuned** ProtBERT predictor used in the existing stack.
+
+The job verifies and reuses that stack's saved seed-matched, lock-matched
+out-of-fold and validation predictions. It trains only the contextual
+positional predictor on the same five outer grouped folds, selects epochs on
+inner training-only grouped folds, and refits the logistic combination using
+training out-of-fold scores. Its report includes the old positional-only and
+stack metrics alongside contextual positional-only and contextual stack
+metrics. No held-out test rows are encoded or scored. The new embeddings
+are cached in memory for this job and are not saved as an output artifact.
+
+The reference stack must already be complete for the selected seed. Submit
+from the HPC directory after syncing the code commit:
+
+```bash
+export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
+export RUN_SEED=42
+sbatch --export=ALL project_mmkla_contextual_positional_clear.sbatch
+```
+
+The default reference is
+`outputs/hpc_clear_lactyl_development/mmkla_positional_stack/seed_42/results/`;
+`REFERENCE_DIR` can override it. New results go to
+`outputs/hpc_clear_lactyl_development/mmkla_contextual_positional_stack/seed_42/results/`.
+Only the CLEAR-Lactyl training and validation partitions are used. The
+validation results are development evidence, not independent-test performance.
+
 Results are written to
 `outputs/hpc_clear_lactyl_development/token_gated_protbert_cksaap/seed_42/`.

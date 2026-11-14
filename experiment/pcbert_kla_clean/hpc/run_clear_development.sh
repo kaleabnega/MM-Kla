@@ -20,7 +20,7 @@ EXPECTED_COMMIT="${EXPECTED_COMMIT:?Set EXPECTED_COMMIT to the full repository c
 RUN_DIR="${OUTPUT_ROOT}/${RUN_MODEL}/seed_${RUN_SEED}"
 
 case "${RUN_MODEL}" in
-    baseline|token_gated|token_gated_esm2_150m_full30|token_gated_protbert|token_gated_protbert_sgd|token_gated_protbert_adamw|token_gated_protbert_head_lr|token_gated_protbert_cksaap|token_gated_protbert_cksaap_projection|token_gated_protbert_full30_last4|token_gated_protbert_full30_all|token_gated_protbert_bilstm|mmkla_positional_stack|hybridkla_architecture_aligned) ;;
+    baseline|token_gated|token_gated_esm2_150m_full30|token_gated_protbert|token_gated_protbert_sgd|token_gated_protbert_adamw|token_gated_protbert_head_lr|token_gated_protbert_cksaap|token_gated_protbert_cksaap_projection|token_gated_protbert_full30_last4|token_gated_protbert_full30_all|token_gated_protbert_bilstm|mmkla_positional_stack|mmkla_contextual_positional_stack|hybridkla_architecture_aligned) ;;
     *) echo "Unsupported model: ${RUN_MODEL}" >&2; exit 2 ;;
 esac
 if [[ ! "${RUN_SEED}" =~ ^[0-9]+$ || ! "${EXPECTED_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
@@ -53,6 +53,13 @@ PYTHON="${VENV_DIR}/bin/python"
 if [[ "${RUN_MODEL}" == hybridkla_architecture_aligned ]]; then
     printf '%s  %s\n' '73ddb128c441d7b213c4636e6bb6ce34501e82143c2b9bc06ec329d68a422993' "${HYBRID_ARCHIVE}" | sha256sum --check --status
 fi
+if [[ "${RUN_MODEL}" == mmkla_contextual_positional_stack ]]; then
+    REFERENCE_DIR="${REFERENCE_DIR:-${OUTPUT_ROOT}/mmkla_positional_stack/seed_${RUN_SEED}/results}"
+    [[ -f "${REFERENCE_DIR}/report.json" && -f "${REFERENCE_DIR}/oof_branch_scores.npz" && -f "${REFERENCE_DIR}/validation_predictions.csv" ]] || {
+        echo "Completed reference stack artifacts are required: ${REFERENCE_DIR}" >&2
+        exit 2
+    }
+fi
 
 mkdir -p "${RUN_DIR}"
 printf 'job_id=%s\nnode=%s\nmodel=%s\nseed=%s\ncommit=%s\nlock_sha256=%s\n' \
@@ -66,6 +73,11 @@ if [[ "${RUN_MODEL}" == mmkla_positional_stack ]]; then
     "${PYTHON}" -u "${PROJECT_DIR}/scripts/run_clear_stacked.py" \
         --clear-lock "${LOCK}" --output-dir "${RUN_DIR}/results" \
         --device cuda:0 --seed "${RUN_SEED}" --epochs 30 --patience 5
+elif [[ "${RUN_MODEL}" == mmkla_contextual_positional_stack ]]; then
+    "${PYTHON}" -u "${PROJECT_DIR}/scripts/run_clear_contextual_positional.py" \
+        --clear-lock "${LOCK}" --reference-dir "${REFERENCE_DIR}" \
+        --output-dir "${RUN_DIR}/results" --device cuda:0 \
+        --seed "${RUN_SEED}" --epochs 30 --patience 5
 elif [[ "${RUN_MODEL}" == hybridkla_architecture_aligned ]]; then
     RESOURCE_DIR="${RUN_DIR}/hybridkla_resources"
     "${PYTHON}" "${HPC_DIR}/extract_hybridkla_resources.py" "${HYBRID_ARCHIVE}" "${RESOURCE_DIR}"

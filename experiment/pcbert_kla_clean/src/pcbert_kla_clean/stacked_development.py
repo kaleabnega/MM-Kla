@@ -52,6 +52,9 @@ class PositionalSequenceBranch(nn.Module):
     def forward(self, tokens: torch.Tensor) -> torch.Tensor:
         positions = torch.arange(51, device=tokens.device)
         embedded = self.residue(tokens) + self.position(positions)[None, :, :]
+        return self.forward_embedded(embedded)
+
+    def forward_embedded(self, embedded: torch.Tensor) -> torch.Tensor:
         states, _ = self.encoder(embedded)
         center = states[:, 25, :]
         query = center[:, None, :].expand_as(states)

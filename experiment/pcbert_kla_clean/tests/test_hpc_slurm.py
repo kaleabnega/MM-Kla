@@ -170,6 +170,21 @@ class HpcSlurmTests(unittest.TestCase):
         self.assertIn("scripts/run_clear_stacked.py", runner)
         self.assertIn("--epochs 30 --patience 5", runner)
 
+    def test_contextual_positional_job_reuses_reference_and_stays_on_compute_node(self):
+        runner_path = HPC_DIR / "run_clear_development.sh"
+        job_path = HPC_DIR / "project_mmkla_contextual_positional_clear.sbatch"
+        subprocess.run(["bash", "-n", str(runner_path)], check=True)
+        subprocess.run(["bash", "-n", str(job_path)], check=True)
+        runner = runner_path.read_text()
+        job = job_path.read_text()
+        self.assertIn("RUN_MODEL=mmkla_contextual_positional_stack", job)
+        self.assertIn("#SBATCH --partition=cvlab-a5000", job)
+        self.assertIn("#SBATCH --gres=gpu:1", job)
+        self.assertIn("SLURMD_NODENAME", runner)
+        self.assertIn("scripts/run_clear_contextual_positional.py", runner)
+        self.assertIn("oof_branch_scores.npz", runner)
+        self.assertIn("--epochs 30 --patience 5", runner)
+
 
 if __name__ == "__main__":
     unittest.main()
