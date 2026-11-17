@@ -115,6 +115,46 @@ completed PCBert-Kla results remain in its output directory.
 
 ## CLEAR-Lactyl validation jobs
 
+### Locked internal held-out evaluation
+
+`project_clear_saved_test.sbatch` reloads the seed-42 validation-selected
+checkpoints for PCBert-Kla, original token-gated MM-Kla, HybridKla-aligned,
+and DeepKla-aligned. Here **original MM-Kla** means the four-layer ProtBERT
+token-gated model with 27 descriptors, no CKSAAP, and the AdamW encoder/head
+learning-rate configuration saved under `token_gated_protbert_head_lr`.
+Before scoring held-out rows, each checkpoint must reproduce its saved
+validation AUPRC, AUC, and MCC. `project_clear_stack_test.sbatch` reruns the
+seed-42 five-fold two-branch experiment because the earlier run did not save
+fold checkpoints. It checks its validation AUPRC and AUC against the earlier
+report before accepting held-out metrics. Both jobs use threshold 0.5 and
+the same locked CLEAR-Lactyl test rows. No test metric is used to choose a
+configuration.
+The two-branch prediction averages five models trained on different grouped
+subsets; the three single-network checkpoints were fitted once on the full
+training partition. This training procedure difference should accompany any
+comparative table.
+
+The CLEAR-Lactyl `internal_test` partition is protein/homology-group held
+out, **not** a separate-study independent dataset. Reports retain that name.
+The saved models are architecture-aligned implementations, with DeepKla and
+HybridKla explicitly not claimed as exact reproductions of the authors' code.
+
+After syncing the code commit and setting `EXPECTED_COMMIT`, submit from
+this directory:
+
+```bash
+export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
+sbatch --export=ALL project_clear_saved_test.sbatch
+sbatch --export=ALL project_clear_stack_test.sbatch
+```
+
+Both jobs require an allocated A5000 compute GPU, the locked data files, the
+isolated Python environment, and the existing seed-42 result artifacts. The
+two-branch reference report is in the sibling `MM-Kla-stack` checkout by
+default; `STACK_REFERENCE_REPORT` overrides it. Outputs go to separate
+`outputs/hpc_clear_lactyl_final/{saved,stacked}/seed_42/` directories and
+will not overwrite previous runs.
+
 `project_deepkla_clear.sbatch` runs the DeepKla-aligned PyTorch port on the
 same locked CLEAR-Lactyl train and validation partitions. It uses the released
 architecture and residue encoding with RMSprop and MSE, but selects the best

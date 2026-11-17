@@ -1,4 +1,4 @@
-"""Validation-only CLEAR-Lactyl two-branch experiment."""
+"""CLEAR-Lactyl two-branch experiment with optional locked test scoring."""
 
 from __future__ import annotations
 
@@ -22,11 +22,18 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--patience", type=int, default=5)
+    parser.add_argument("--score-internal-test", action="store_true")
+    parser.add_argument("--reference-report", type=Path)
     args = parser.parse_args()
     result = run(args.clear_lock, args.output_dir, torch.device(args.device),
-                 args.seed, args.epochs, args.patience)
+                 args.seed, args.epochs, args.patience,
+                 score_internal_test=args.score_internal_test,
+                 reference_report=args.reference_report)
     print("CLEAR-Lactyl stacked validation:")
     print(json.dumps(result["validation_metrics"], indent=2), flush=True)
+    if args.score_internal_test:
+        print("CLEAR-Lactyl internal held-out test:")
+        print(json.dumps(result["internal_test_metrics"], indent=2), flush=True)
 
 
 if __name__ == "__main__":

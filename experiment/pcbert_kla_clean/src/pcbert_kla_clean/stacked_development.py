@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from pcbert_kla_clean.backbones import load_tokenizer
 from pcbert_kla_clean.clear_lactyl import load_clear_lactyl
+from pcbert_kla_clean.data import KlaSplit
 from pcbert_kla_clean.datasets import make_loader
 from pcbert_kla_clean.metrics import compute_binary_metrics
 from pcbert_kla_clean.source_study import sha256
@@ -214,12 +215,23 @@ def read_training_groups(lock_path: Path, split, train_count: int) -> np.ndarray
 
 
 def run(lock_path: Path, output_dir: Path, device: torch.device, seed: int,
-        max_epochs: int = 30, patience: int = 5) -> dict:
+        max_epochs: int = 30, patience: int = 5,
+        score_internal_test: bool = False,
+        reference_report: Path | None = None) -> dict:
     if max_epochs < 1 or patience < 1 or seed < 0:
         raise ValueError("Invalid seed, epoch count, or patience")
+    if score_internal_test and reference_report is None:
+        raise ValueError("Locked test scoring requires the prior validation report")
     if device.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA requested but unavailable")
-    split, validation_idx, _ = load_clear_lactyl(lock_path, add_cksaap=True)
+    split, validation_idx, internal_test = load_clear_lactyl(lock_path, add_cksaap=True)
+    test_idx = np.arange(len(split.records), len(split.records) + len(internal_test.records))
+    if score_internal_test:
+        split = KlaSplit(
+            records=split.records + internal_test.records,
+            feature_names=split.feature_names,
+            features=np.concatenate((split.features, internal_test.features)),
+        )
     train_count = int(validation_idx[0])
     train_idx = np.arange(train_count)
     labels = split.labels.astype(int)
@@ -229,6 +241,7 @@ def run(lock_path: Path, output_dir: Path, device: torch.device, seed: int,
     tokenizer = load_tokenizer("Rostlab/prot_bert", None)
     oof = np.full((train_count, 2), np.nan, dtype=np.float64)
     validation = np.zeros((len(validation_idx), 2), dtype=np.float64)
+    test_predictions = np.zeros((len(test_idx), 2), dtype=np.float64) if score_internal_test else None
     fold_reports = []
     output_dir.mkdir(parents=True, exist_ok=False)
     for fold_number, (outer_train, held_idx) in enumerate(folds, 1):
@@ -248,13 +261,16 @@ def run(lock_path: Path, output_dir: Path, device: torch.device, seed: int,
         report["protbert_selected_epoch"] = prot_epoch
         report["protbert_inner_auprc"] = prot_ap
         print(f"Fold {fold_number}/5: refitting ProtBERT", flush=True)
-        score_indices = np.r_[held_idx, validation_idx]
+        score_indices = np.r_[held_idx, validation_idx, test_idx] if score_internal_test else np.r_[held_idx, validation_idx]
         prot_scores = fit_protbert(
             split, outer_train, score_indices, tokenizer, device,
             seed + 100 * fold_number, max_epochs, patience, fixed_epochs=prot_epoch,
         )
         oof[held_idx, 0] = prot_scores[:len(held_idx)]
-        validation[:, 0] += prot_scores[len(held_idx):] / len(folds)
+        val_end = len(held_idx) + len(validation_idx)
+        validation[:, 0] += prot_scores[len(held_idx):val_end] / len(folds)
+        if test_predictions is not None:
+            test_predictions[:, 0] += prot_scores[val_end:] / len(folds)
 
         print(f"Fold {fold_number}/5: selecting positional epoch", flush=True)
         pos_epoch, pos_ap = fit_positional(
@@ -269,10 +285,13 @@ def run(lock_path: Path, output_dir: Path, device: torch.device, seed: int,
             seed + 100 * fold_number + 1, pos_epoch, patience,
         )
         oof[held_idx, 1] = pos_scores[:len(held_idx)]
-        validation[:, 1] += pos_scores[len(held_idx):] / len(folds)
+        validation[:, 1] += pos_scores[len(held_idx):val_end] / len(folds)
+        if test_predictions is not None:
+            test_predictions[:, 1] += pos_scores[val_end:] / len(folds)
         fold_reports.append(report)
         print(json.dumps(report, sort_keys=True), flush=True)
-    if not np.isfinite(oof).all() or not np.isfinite(validation).all():
+    if (not np.isfinite(oof).all() or not np.isfinite(validation).all() or
+            test_predictions is not None and not np.isfinite(test_predictions).all()):
         raise FloatingPointError("Incomplete or nonfinite branch scores")
     meta = LogisticRegression(C=1.0, max_iter=1000, solver="lbfgs")
     meta.fit(oof, labels[:train_count])
@@ -284,6 +303,33 @@ def run(lock_path: Path, output_dir: Path, device: torch.device, seed: int,
     }
     results = {name: compute_binary_metrics(labels[validation_idx], values, threshold=0.5)
                for name, values in scores.items()}
+    if score_internal_test:
+        reference = json.loads(reference_report.read_text())
+        if (reference["seed"] != seed or reference["lock_sha256"] != sha256(lock_path) or
+                reference["internal_test_scored"]):
+            raise ValueError("Prior two-branch report does not match this validation run")
+        for name in ("protbert_cksaap", "positional_sequence", "oof_logistic_combination"):
+            previous = reference["validation_metrics"][name]
+            for key in ("AUPRC", "AUC"):
+                if abs(results[name][key] - previous[key]) > 1e-3:
+                    raise ValueError(f"Two-branch validation {name} {key} did not reproduce")
+    test_results = None
+    if test_predictions is not None:
+        test_scores = {
+            "protbert_cksaap": test_predictions[:, 0],
+            "positional_sequence": test_predictions[:, 1],
+            "simple_average": test_predictions.mean(axis=1),
+            "oof_logistic_combination": meta.predict_proba(test_predictions)[:, 1],
+        }
+        test_results = {name: compute_binary_metrics(labels[test_idx], values, threshold=0.5)
+                        for name, values in test_scores.items()}
+        with (output_dir / "internal_test_predictions.csv").open("w", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["accession", "position_1based", "label", *test_scores])
+            for row_number, index in enumerate(test_idx):
+                record = split.records[int(index)]
+                writer.writerow([record.name, record.position, record.label,
+                                 *(float(values[row_number]) for values in test_scores.values())])
     np.savez_compressed(output_dir / "oof_branch_scores.npz", scores=oof,
                         labels=labels[:train_count], groups=groups)
     with (output_dir / "validation_predictions.csv").open("w", newline="") as handle:
@@ -303,7 +349,10 @@ def run(lock_path: Path, output_dir: Path, device: torch.device, seed: int,
         "selection": "inner grouped training fold AUPRC only",
         "primary_metric": "validation AUPRC",
         "validation_metrics": results,
-        "internal_test_scored": False,
+        "internal_test_scored": score_internal_test,
     }
+    if test_results is not None:
+        report["internal_test_rows"] = len(test_idx)
+        report["internal_test_metrics"] = test_results
     (output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
