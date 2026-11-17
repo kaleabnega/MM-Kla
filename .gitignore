@@ -10,5 +10,6 @@ drawio-architecture-*.md
 experiment/pcbert_kla_clean/outputs/*
 experiment/pcbert_kla_clean/downloaded-dataset/
 kaggle-outputs/
+baselines/upstream_sources/
 !experiment/pcbert_kla_clean/outputs/
 !experiment/pcbert_kla_clean/outputs/paper_reported_metrics.json
