@@ -115,6 +115,27 @@ completed PCBert-Kla results remain in its output directory.
 
 ## CLEAR-Lactyl validation jobs
 
+`project_deepkla_clear.sbatch` runs the DeepKla-aligned PyTorch port on the
+same locked CLEAR-Lactyl train and validation partitions. It uses the released
+architecture and residue encoding with RMSprop and MSE, but selects the best
+epoch by validation AUPRC under this benchmark's protocol. It is not an exact
+Keras 2.0.6 reproduction. The script checks the locked data hashes and code
+commit, requires an allocated compute GPU, and writes only validation metrics.
+After syncing the code commit and the two locked data files, submit from this
+directory:
+
+```bash
+export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
+export RUN_SEED=42
+sbatch --export=ALL project_deepkla_clear.sbatch
+```
+
+The outputs are in
+`outputs/hpc_clear_lactyl_development/deepkla_aligned/seed_42/results/`.
+The `report.json`, `history.json`, and `validation_predictions.csv` files are
+the comparison artifacts; `best_model.pt` contains the validation-selected
+weights. No internal-test prediction is generated.
+
 `project_mmkla_clear.sbatch` trains the current ESM-2-650M LoRA token-gated
 MM-Kla model. `project_compare_clear.sbatch` trains the four-layer ProtBert
 PCBert-Kla baseline and then the eight-branch HybridKla-aligned model on one

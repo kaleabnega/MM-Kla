@@ -33,3 +33,23 @@ partition. Published checkpoints or metrics cannot substitute for that
 experiment, and the held-out test should remain untouched. Any legacy-code
 port, environment change, or replacement training pipeline must be disclosed
 before its result is presented as a comparison.
+
+## CLEAR-Lactyl DeepKla-aligned experiment
+
+The project-owned PyTorch port is in
+`experiment/pcbert_kla_clean/src/pcbert_kla_clean/deepkla.py`; its
+validation-only runner is `scripts/run_deepkla_clear.py`. It retains the
+author script's residue-to-ID preprocessing (including the `Y`-to-OOV
+behavior), 200-position left padding, 128-dimensional embedding, dropout,
+10- and 5-wide 1D convolutions with max-pooling, 50-unit bidirectional GRU,
+context attention, sigmoid output, MSE loss, and RMSprop optimizer. Epoch
+selection uses validation AUPRC to match this project's benchmark protocol,
+not the author's validation-loss stopping rule. PyTorch GRU and RMSprop are
+not numerically identical to Keras 2.0.6. Results must be labelled
+**DeepKla-aligned PyTorch**, not exact DeepKla reproduction.
+
+The runner reads the locked CLEAR-Lactyl training and validation partitions
+and produces `report.json`, `history.json`, `validation_predictions.csv`, and
+`best_model.pt`. The internal test is not evaluated. The HPC entry point is
+`experiment/pcbert_kla_clean/hpc/project_deepkla_clear.sbatch`; it requires a
+Slurm GPU allocation and the pinned project environment.
