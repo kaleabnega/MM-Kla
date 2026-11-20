@@ -467,3 +467,39 @@ New results are written to
 
 Results are written to
 `outputs/hpc_clear_lactyl_development/token_gated_protbert_cksaap/seed_42/`.
+
+### TransKla on locked CLEAR-Lactyl
+
+`project_transkla_clear_develop.sbatch` trains the authors' released TransKla
+architecture from scratch on the locked CLEAR-Lactyl training partition and
+selects the EMA checkpoint by validation AUPRC. The adapter takes the central
+41 residues from each verified 51-residue window and supplies the matching
+full UniProt reference protein for TransKla's eight global context tokens.
+No source-dataset checkpoint or original TransKla benchmark data is used.
+
+The authors' code is loaded from a separate checkout of
+`https://github.com/abduljabbar-repo/TransKla` at commit
+`15ab472180cab74682f56f9f018b844cec264cc6`. The job checks both the
+commit and the source-file SHA-256 before running. Their code is not copied
+into this repository. The comparison is on common locked records, but
+TransKla has access to full-protein sequence context that the window-only
+predictors do not; this input difference must be disclosed in any report.
+
+From the `hpc/` directory on the HPC login node, after syncing the project
+checkout and cloning the pinned author source into
+`/share-home/sgp2_kli/kaleab/new_kaleab/my_work/TransKla-source`:
+
+```bash
+export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
+sbatch --export=ALL project_transkla_clear_develop.sbatch
+```
+
+Development outputs include the selected checkpoint, epoch history, validation
+scores, and metrics at both 0.5 and an MCC-maximizing threshold chosen on
+validation. The paper-like 40-epoch maximum, AdamW, warmup/cosine schedule,
+EMA, and patience-10 stopping are kept from the released defaults. The
+independent test is not scored by this job. After reviewing the validation
+report, submit `project_transkla_clear_heldout.sbatch` with the same pinned
+project commit. That job loads the saved checkpoint for inference only and
+reports fixed-0.5 and validation-calibrated test metrics separately. The
+fixed-0.5 metrics are directly comparable to the existing test reports.
