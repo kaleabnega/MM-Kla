@@ -1,0 +1,179 @@
+{
+  "source": "locked CLEAR-Lactyl internal held-out test",
+  "rows": 5888,
+  "positives": 2911,
+  "negatives": 2977,
+  "homology_groups": 729,
+  "manifest_sha256": "f3fbb6dddf346fd0086d693f783ec476ec802eb56586ed3225a2eda82f72551b",
+  "prediction_sha256": {
+    "pcbert_kla_predictions.csv": "84d309c1cb9184105f5140c7f1763f728884db5094c6999901cc57a82cd68c3b",
+    "original_mm_kla_predictions.csv": "b062fc525e3de9b2a3a4853319b1ab0f2e3094581bbd474e845016e58708adb9",
+    "deepkla_aligned_predictions.csv": "14ec444f09aa85f7f2f27ec737183bbde0ad17902274aa45baf439d836bcd973",
+    "hybridkla_aligned_predictions.csv": "8109d9f5e4049ffd9f4ceea5af27b341c3a5b89e8ad12d1f5192dbb40f38257e",
+    "test_predictions.csv": "95647bd523a41611d82b4193d32adbf903ed42f4cbce180fe0cea04fb4ff1750",
+    "internal_test_predictions.csv": "d6af678097605ebb3f94025ef60f3964ff2f3335a08848e6ac767ad03dc5e085"
+  },
+  "metrics_at_0_5": {
+    "PCBert-Kla": {
+      "AUPRC": 0.8173005310152387,
+      "AUROC": 0.8277443567984341,
+      "MCC": 0.4866734357856958,
+      "F1": 0.7609665999692166,
+      "precision": 0.6893474623535973,
+      "recall": 0.8491927172792855,
+      "specificity": 0.6257977830030231,
+      "accuracy": 0.7362432065217391,
+      "TP": 2472,
+      "FP": 1114,
+      "TN": 1863,
+      "FN": 439
+    },
+    "MM-Kla (original token gate)": {
+      "AUPRC": 0.8133938711189702,
+      "AUROC": 0.8262985418842063,
+      "MCC": 0.4889675917026628,
+      "F1": 0.7518871020676074,
+      "precision": 0.7197612315425699,
+      "recall": 0.7870147715561663,
+      "specificity": 0.700369499496137,
+      "accuracy": 0.7432065217391305,
+      "TP": 2291,
+      "FP": 892,
+      "TN": 2085,
+      "FN": 620
+    },
+    "DeepKla-aligned": {
+      "AUPRC": 0.8146315928649401,
+      "AUROC": 0.8201867010414323,
+      "MCC": 0.466481778326509,
+      "F1": 0.72414398595259,
+      "precision": 0.7406609195402298,
+      "recall": 0.7083476468567502,
+      "specificity": 0.7574739670809539,
+      "accuracy": 0.7331861413043478,
+      "TP": 2062,
+      "FP": 722,
+      "TN": 2255,
+      "FN": 849
+    },
+    "HybridKla-aligned": {
+      "AUPRC": 0.8453781832821988,
+      "AUROC": 0.8546321638920258,
+      "MCC": 0.5394368749746141,
+      "F1": 0.7705832628909552,
+      "precision": 0.7586551264980027,
+      "recall": 0.7828924768120921,
+      "specificity": 0.7564662411823984,
+      "accuracy": 0.76953125,
+      "TP": 2279,
+      "FP": 725,
+      "TN": 2252,
+      "FN": 632
+    },
+    "TransKla": {
+      "AUPRC": 0.8555259856294279,
+      "AUROC": 0.8682516953808351,
+      "MCC": 0.5696580399812005,
+      "F1": 0.786758527978491,
+      "precision": 0.7700657894736842,
+      "recall": 0.8041909996564754,
+      "specificity": 0.7651998656365468,
+      "accuracy": 0.7844769021739131,
+      "TP": 2341,
+      "FP": 699,
+      "TN": 2278,
+      "FN": 570
+    },
+    "MM-Kla (ProtBERT branch)": {
+      "AUPRC": 0.8245762633085623,
+      "AUROC": 0.8314102150611461,
+      "MCC": 0.482314074555536,
+      "F1": 0.7342169515172654,
+      "precision": 0.7456606447042153,
+      "recall": 0.7231192030230161,
+      "specificity": 0.7588176016123614,
+      "accuracy": 0.7411684782608695,
+      "TP": 2105,
+      "FP": 718,
+      "TN": 2259,
+      "FN": 806
+    },
+    "MM-Kla (positional branch)": {
+      "AUPRC": 0.8480659357433915,
+      "AUROC": 0.8556985670629296,
+      "MCC": 0.5455544180306257,
+      "F1": 0.7715163934426229,
+      "precision": 0.767062818336163,
+      "recall": 0.7760219855719684,
+      "specificity": 0.7695666778636211,
+      "accuracy": 0.7727581521739131,
+      "TP": 2259,
+      "FP": 686,
+      "TN": 2291,
+      "FN": 652
+    },
+    "MM-Kla (score average)": {
+      "AUPRC": 0.8511746259338825,
+      "AUROC": 0.8573924189425698,
+      "MCC": 0.5461224237759149,
+      "F1": 0.770051635111876,
+      "precision": 0.7716453949637806,
+      "recall": 0.7684644452078324,
+      "specificity": 0.7776284850520658,
+      "accuracy": 0.7730978260869565,
+      "TP": 2237,
+      "FP": 662,
+      "TN": 2315,
+      "FN": 674
+    },
+    "MM-Kla (OOF combination)": {
+      "AUPRC": 0.8528282282756341,
+      "AUROC": 0.859389754059723,
+      "MCC": 0.5506723000700449,
+      "F1": 0.7762757688408246,
+      "precision": 0.7638842700365813,
+      "recall": 0.7890759189282034,
+      "specificity": 0.7615048706751764,
+      "accuracy": 0.7751358695652174,
+      "TP": 2297,
+      "FP": 710,
+      "TN": 2267,
+      "FN": 614
+    }
+  },
+  "paired_group_bootstrap_auprc": {
+    "PCBert-Kla": {
+      "delta": 0.0355276972603954,
+      "percentile_95_ci": [
+        0.02783106308619427,
+        0.043226856703808846
+      ],
+      "bootstrap_replicates": 2000
+    },
+    "HybridKla-aligned": {
+      "delta": 0.0074500449934352675,
+      "percentile_95_ci": [
+        0.0029574803432687174,
+        0.012406960249370887
+      ],
+      "bootstrap_replicates": 2000
+    },
+    "TransKla": {
+      "delta": -0.0026977573537938504,
+      "percentile_95_ci": [
+        -0.01590387597654443,
+        0.010097792079238123
+      ],
+      "bootstrap_replicates": 2000
+    },
+    "MM-Kla (positional branch)": {
+      "delta": 0.004762292532242585,
+      "percentile_95_ci": [
+        0.0011462392829764162,
+        0.008270822187196259
+      ],
+      "bootstrap_replicates": 2000
+    }
+  },
+  "sequence_context_max_abs_frequency_difference": 0.06274994815975496
+}
