@@ -79,11 +79,11 @@ def grouped_splits(labels: np.ndarray, groups: np.ndarray, seed: int, folds: int
     return splits
 
 
-def protbert_args(epochs: int) -> Namespace:
+def protbert_args(epochs: int, ablation: str = "none", freeze_encoder: bool = False) -> Namespace:
     return Namespace(
         architecture="token_gated", model_name="Rostlab/prot_bert",
         encoder_layers=4, fusion_dim=256, attention_dim=256, arch_dropout=0.2,
-        site_token_index=26, freeze_encoder=False, ablation="none", cache_dir=None,
+        site_token_index=26, freeze_encoder=freeze_encoder, ablation=ablation, cache_dir=None,
         encoder_adaptation="full", lora_rank=8, lora_alpha=32, lora_dropout=0.3,
         train_last_encoder_layers=None, optimizer="adamw", learning_rate=2e-5,
         head_learning_rate=1e-4, weight_decay=0.01, adam_beta1=0.9,
@@ -93,11 +93,12 @@ def protbert_args(epochs: int) -> Namespace:
 
 
 def fit_protbert(split, train_idx, score_idx, tokenizer, device, seed,
-                 max_epochs, patience, selection_idx=None, fixed_epochs=None):
+                 max_epochs, patience, selection_idx=None, fixed_epochs=None,
+                 ablation="none", freeze_encoder=False):
     if selection_idx is None and (fixed_epochs is None or not 1 <= fixed_epochs <= max_epochs):
         raise ValueError("Refit needs a selected epoch within the 30-epoch schedule")
     set_seed(seed)
-    args = protbert_args(max_epochs)
+    args = protbert_args(max_epochs, ablation=ablation, freeze_encoder=freeze_encoder)
     scaler = MinMaxScaler()
     scaled = np.empty_like(split.features, dtype=np.float32)
     scaled[train_idx] = scaler.fit_transform(split.features[train_idx])
@@ -214,14 +215,58 @@ def read_training_groups(lock_path: Path, split, train_count: int) -> np.ndarray
     return groups
 
 
+def read_positional_reference(reference_dir: Path, lock_path: Path, split,
+                              train_count: int, validation_idx: np.ndarray,
+                              groups: np.ndarray, seed: int) -> tuple[np.ndarray, np.ndarray, dict]:
+    report = json.loads((reference_dir / "report.json").read_text())
+    if (report["seed"] != seed or report["lock_sha256"] != sha256(lock_path) or
+            report["training_rows"] != train_count or
+            report["validation_rows"] != len(validation_idx) or
+            report["feature_dim"] != split.features.shape[1] or
+            report["internal_test_scored"] or len(report["folds"]) != 5):
+        raise ValueError("Positional reference does not match the locked validation protocol")
+    with np.load(reference_dir / "oof_branch_scores.npz") as saved:
+        if (saved["scores"].shape != (train_count, 2) or
+                not np.array_equal(saved["labels"], split.labels[:train_count]) or
+                not np.array_equal(saved["groups"], groups)):
+            raise ValueError("Positional OOF rows, labels, or groups do not match")
+        oof_positional = saved["scores"][:, 1].copy()
+    with (reference_dir / "validation_predictions.csv").open(newline="") as handle:
+        validation_rows = list(csv.DictReader(handle))
+    if len(validation_rows) != len(validation_idx):
+        raise ValueError("Positional validation rows do not match")
+    for row, index in zip(validation_rows, validation_idx):
+        record = split.records[int(index)]
+        if (row["accession"] != record.name or
+                int(row["position_1based"]) != record.position or
+                int(row["label"]) != record.label):
+            raise ValueError("Positional validation identities or labels do not match")
+    validation_positional = np.asarray(
+        [float(row["positional_sequence"]) for row in validation_rows], dtype=np.float64,
+    )
+    if (not np.isfinite(oof_positional).all() or
+            not np.isfinite(validation_positional).all() or
+            ((oof_positional < 0) | (oof_positional > 1)).any() or
+            ((validation_positional < 0) | (validation_positional > 1)).any()):
+        raise ValueError("Positional reference contains invalid probabilities")
+    return oof_positional, validation_positional, report
+
+
 def run(lock_path: Path, output_dir: Path, device: torch.device, seed: int,
         max_epochs: int = 30, patience: int = 5,
         score_internal_test: bool = False,
-        reference_report: Path | None = None) -> dict:
+        reference_report: Path | None = None,
+        protbert_ablation: str = "none",
+        positional_reference_dir: Path | None = None,
+        freeze_protbert: bool = False) -> dict:
     if max_epochs < 1 or patience < 1 or seed < 0:
         raise ValueError("Invalid seed, epoch count, or patience")
     if score_internal_test and reference_report is None:
         raise ValueError("Locked test scoring requires the prior validation report")
+    if positional_reference_dir is not None and score_internal_test:
+        raise ValueError("Saved positional reference supports validation-only ablations")
+    if protbert_ablation != "none" and positional_reference_dir is None:
+        raise ValueError("Component ablations require a fixed positional reference")
     if device.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA requested but unavailable")
     split, validation_idx, internal_test = load_clear_lactyl(lock_path, add_cksaap=True)
@@ -237,11 +282,21 @@ def run(lock_path: Path, output_dir: Path, device: torch.device, seed: int,
     labels = split.labels.astype(int)
     groups = read_training_groups(lock_path, split, train_count)
     folds = grouped_splits(labels[:train_count], groups, seed)
-    tokens = sequence_tokens(split.sequences)
+    reference = None
+    if positional_reference_dir is not None:
+        positional_oof, positional_validation, reference = read_positional_reference(
+            positional_reference_dir, lock_path, split, train_count,
+            validation_idx, groups, seed,
+        )
+    else:
+        tokens = sequence_tokens(split.sequences)
     tokenizer = load_tokenizer("Rostlab/prot_bert", None)
     oof = np.full((train_count, 2), np.nan, dtype=np.float64)
     validation = np.zeros((len(validation_idx), 2), dtype=np.float64)
     test_predictions = np.zeros((len(test_idx), 2), dtype=np.float64) if score_internal_test else None
+    if reference is not None:
+        oof[:, 1] = positional_oof
+        validation[:, 1] = positional_validation
     fold_reports = []
     output_dir.mkdir(parents=True, exist_ok=False)
     for fold_number, (outer_train, held_idx) in enumerate(folds, 1):
@@ -257,6 +312,7 @@ def run(lock_path: Path, output_dir: Path, device: torch.device, seed: int,
         prot_epoch, prot_ap = fit_protbert(
             split, inner_train, inner_stop, tokenizer, device, seed + 100 * fold_number,
             max_epochs, patience, selection_idx=inner_stop,
+            ablation=protbert_ablation, freeze_encoder=freeze_protbert,
         )
         report["protbert_selected_epoch"] = prot_epoch
         report["protbert_inner_auprc"] = prot_ap
@@ -265,6 +321,7 @@ def run(lock_path: Path, output_dir: Path, device: torch.device, seed: int,
         prot_scores = fit_protbert(
             split, outer_train, score_indices, tokenizer, device,
             seed + 100 * fold_number, max_epochs, patience, fixed_epochs=prot_epoch,
+            ablation=protbert_ablation, freeze_encoder=freeze_protbert,
         )
         oof[held_idx, 0] = prot_scores[:len(held_idx)]
         val_end = len(held_idx) + len(validation_idx)
@@ -272,22 +329,26 @@ def run(lock_path: Path, output_dir: Path, device: torch.device, seed: int,
         if test_predictions is not None:
             test_predictions[:, 0] += prot_scores[val_end:] / len(folds)
 
-        print(f"Fold {fold_number}/5: selecting positional epoch", flush=True)
-        pos_epoch, pos_ap = fit_positional(
-            tokens, labels, inner_train, inner_stop, device, seed + 100 * fold_number + 1,
-            max_epochs, patience, selection_idx=inner_stop,
-        )
-        report["positional_selected_epoch"] = pos_epoch
-        report["positional_inner_auprc"] = pos_ap
-        print(f"Fold {fold_number}/5: refitting positional branch", flush=True)
-        pos_scores = fit_positional(
-            tokens, labels, outer_train, score_indices, device,
-            seed + 100 * fold_number + 1, pos_epoch, patience,
-        )
-        oof[held_idx, 1] = pos_scores[:len(held_idx)]
-        validation[:, 1] += pos_scores[len(held_idx):val_end] / len(folds)
-        if test_predictions is not None:
-            test_predictions[:, 1] += pos_scores[val_end:] / len(folds)
+        if reference is None:
+            print(f"Fold {fold_number}/5: selecting positional epoch", flush=True)
+            pos_epoch, pos_ap = fit_positional(
+                tokens, labels, inner_train, inner_stop, device, seed + 100 * fold_number + 1,
+                max_epochs, patience, selection_idx=inner_stop,
+            )
+            report["positional_selected_epoch"] = pos_epoch
+            report["positional_inner_auprc"] = pos_ap
+            print(f"Fold {fold_number}/5: refitting positional branch", flush=True)
+            pos_scores = fit_positional(
+                tokens, labels, outer_train, score_indices, device,
+                seed + 100 * fold_number + 1, pos_epoch, patience,
+            )
+            oof[held_idx, 1] = pos_scores[:len(held_idx)]
+            validation[:, 1] += pos_scores[len(held_idx):val_end] / len(folds)
+            if test_predictions is not None:
+                test_predictions[:, 1] += pos_scores[val_end:] / len(folds)
+        else:
+            report["positional_selected_epoch"] = reference["folds"][fold_number - 1]["positional_selected_epoch"]
+            report["positional_inner_auprc"] = reference["folds"][fold_number - 1]["positional_inner_auprc"]
         fold_reports.append(report)
         print(json.dumps(report, sort_keys=True), flush=True)
     if (not np.isfinite(oof).all() or not np.isfinite(validation).all() or
@@ -341,6 +402,9 @@ def run(lock_path: Path, output_dir: Path, device: torch.device, seed: int,
                              *(float(values[row_number]) for values in scores.values())])
     report = {
         "seed": seed, "lock_sha256": sha256(lock_path),
+        "protbert_ablation": protbert_ablation,
+        "freeze_protbert": freeze_protbert,
+        "positional_reference_dir": str(positional_reference_dir) if positional_reference_dir else None,
         "training_rows": train_count, "validation_rows": len(validation_idx),
         "feature_dim": split.features.shape[1], "folds": fold_reports,
         "combiner": {"type": "logistic_regression", "C": 1.0,

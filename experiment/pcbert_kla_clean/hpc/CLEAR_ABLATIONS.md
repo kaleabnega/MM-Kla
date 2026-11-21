@@ -45,3 +45,37 @@ Run the summary command from `experiment/pcbert_kla_clean/`. It checks that
 all runs followed the same declared protocol and reports each metric, paired
 differences from the control, and across-seed summaries. Do not select a
 threshold or architecture based on the locked internal test.
+
+## Full two-predictor validation controls
+
+`project_clear_stack_ablations.sbatch` repeats the proposed component
+replacements inside the five-fold grouped-OOF MM-Kla training protocol, using
+seed 42. It includes the ungated fixed-average fusion control. The unchanged
+positional BiLSTM OOF and validation scores are reused from the prior
+validation-only stack, with lock hash, group IDs, labels, and validation row
+identities checked before training. Each task retrains the first predictor
+on all five outer folds, refits a logistic combiner to training OOF scores,
+and scores validation only. The existing manifest loader parses the internal
+test records for integrity checks, but they are never passed to a model,
+combiner, or metric in these runs.
+
+Submit from the server's `hpc/` directory after syncing the new Git commit:
+
+```bash
+export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
+sbatch --export=ALL project_clear_stack_ablations.sbatch
+```
+
+The default positional reference points to the existing `MM-Kla-stack`
+checkout; set `REFERENCE_DIR` if the saved reference resides elsewhere.
+After all nine tasks complete, run from `experiment/pcbert_kla_clean/`:
+
+```bash
+python scripts/summarize_clear_stack_ablations.py \
+  --output-root outputs/hpc_clear_stack_ablations \
+  --reference-dir /absolute/path/to/mmkla_positional_stack/seed_42/results
+```
+
+The control task must reproduce the original stacked validation AUPRC and
+AUROC within 0.001. This phase remains seed-42 validation evidence, not a
+multi-seed or external-test result.
