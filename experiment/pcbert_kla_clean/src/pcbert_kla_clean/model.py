@@ -141,6 +141,17 @@ class GatedFusion(nn.Module):
         return gate * sequence_embedding + (1.0 - gate) * feature_embedding
 
 
+class ScalarGatedFusion(nn.Module):
+    def __init__(self, dim: int) -> None:
+        super().__init__()
+        self.gate = nn.Sequential(nn.Linear(dim * 2, 1), nn.Sigmoid())
+
+    def forward(self, sequence_embedding: torch.Tensor,
+                feature_embedding: torch.Tensor) -> torch.Tensor:
+        gate = self.gate(torch.cat((sequence_embedding, feature_embedding), dim=1))
+        return gate * sequence_embedding + (1.0 - gate) * feature_embedding
+
+
 class ConcatFusion(nn.Module):
     def __init__(self, dim: int, dropout: float) -> None:
         super().__init__()
@@ -202,6 +213,12 @@ class TokenGatedPCBertKla(nn.Module):
             "no_gated_fusion",
             "no_physicochemical",
             "no_sequence",
+            "cls_pool",
+            "mean_pool",
+            "max_pool",
+            "concat_fusion",
+            "scalar_gate",
+            "no_residual",
         }:
             raise ValueError(f"Unsupported token-gated ablation mode: {ablation}")
 
@@ -254,12 +271,20 @@ class TokenGatedPCBertKla(nn.Module):
                 nn.Dropout(dropout),
             )
 
-        if self.uses_sequence and self.uses_features and ablation == "none":
-            self.fusion = GatedFusion(fusion_dim)
+        if self.uses_sequence and self.uses_features:
+            if ablation == "concat_fusion":
+                self.fusion = ConcatFusion(fusion_dim, dropout)
+            elif ablation == "scalar_gate":
+                self.fusion = ScalarGatedFusion(fusion_dim)
+            elif ablation != "no_gated_fusion":
+                self.fusion = GatedFusion(fusion_dim)
 
+        residual_blocks = [] if ablation == "no_residual" else [
+            ResidualBlock(fusion_dim, dropout=dropout),
+            ResidualBlock(fusion_dim, dropout=dropout),
+        ]
         self.classifier = nn.Sequential(
-            ResidualBlock(fusion_dim, dropout=dropout),
-            ResidualBlock(fusion_dim, dropout=dropout),
+            *residual_blocks,
             nn.LayerNorm(fusion_dim),
             nn.Linear(fusion_dim, fusion_dim // 2),
             nn.GELU(),
@@ -273,6 +298,20 @@ class TokenGatedPCBertKla(nn.Module):
         attention_mask: torch.Tensor,
         input_ids: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        if self.ablation == "cls_pool":
+            return token_embeddings[:, 0, :]
+        if self.ablation in {"mean_pool", "max_pool"}:
+            mask = attention_mask.bool().clone()
+            mask[:, 0] = False
+            sep_indices = attention_mask.long().sum(dim=1) - 1
+            mask[torch.arange(mask.shape[0], device=mask.device), sep_indices] = False
+            if not mask.any(dim=1).all():
+                raise ValueError("Pooling requires at least one residue token")
+            if self.ablation == "mean_pool":
+                weights = mask.unsqueeze(-1).to(token_embeddings.dtype)
+                return (token_embeddings * weights).sum(dim=1) / weights.sum(dim=1)
+            return token_embeddings.masked_fill(~mask.unsqueeze(-1),
+                                                torch.finfo(token_embeddings.dtype).min).amax(dim=1)
         return self.site_attention(token_embeddings, attention_mask)
 
     def forward(
@@ -303,7 +342,8 @@ class TokenGatedPCBertKla(nn.Module):
         if self.uses_features:
             feature_embedding = self.feature_projection(features)
 
-        if self.ablation == "none":
+        if self.ablation in {"none", "cls_pool", "mean_pool", "max_pool",
+                             "concat_fusion", "scalar_gate", "no_residual"}:
             if sequence_embedding is None or feature_embedding is None:
                 raise RuntimeError("Full token-gated model requires both branches")
             fused = self.fusion(sequence_embedding, feature_embedding)

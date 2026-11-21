@@ -161,13 +161,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lstm-layers", type=int, default=1)
     parser.add_argument(
         "--ablation",
-        choices=["none", "no_gated_fusion", "no_physicochemical", "no_sequence"],
+        choices=["none", "no_gated_fusion", "no_physicochemical", "no_sequence",
+                 "cls_pool", "mean_pool", "max_pool", "concat_fusion",
+                 "scalar_gate", "no_residual"],
         default="none",
         help=(
             "Token-gated ablation mode. Use 'none' for the full model, "
             "'no_gated_fusion' for ungated averaging of sequence/features, "
-            "'no_physicochemical' for sequence-only, and 'no_sequence' for "
-            "physicochemical-features-only."
+            "'no_physicochemical' for sequence-only, 'no_sequence' for "
+            "physicochemical-features-only, or a component-level control."
         ),
     )
     parser.add_argument(
@@ -285,6 +287,7 @@ def main() -> None:
         if args.site_token_index is None:
             args.site_token_index = infer_site_token_index(args.model_name)
         args.device = resolve_device(args.device)
+        args.clear_lock_sha256 = report["clear_lock_sha256"]
         config = {
             key: str(value) if isinstance(value, Path) else value
             for key, value in vars(args).items() if key != "output_dir"
