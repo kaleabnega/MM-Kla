@@ -79,3 +79,37 @@ python scripts/summarize_clear_stack_ablations.py \
 The control task must reproduce the original stacked validation AUPRC and
 AUROC within 0.001. This phase remains seed-42 validation evidence, not a
 multi-seed or external-test result.
+
+## Two-seed completion and additional controls
+
+The remaining full-stack controls isolate three components of the positional
+predictor: its learned position embeddings, second BiLSTM layer, and
+center-conditioned attention pooling. In `positional_mean_pool`, the central
+state is still passed to the classifier, but the context vector is the mean
+of all 51 recurrent states. Two further controls remove either the 27
+descriptors or all 1,600 CKSAAP features from the ProtBERT branch; the
+remaining family is scaled on the relevant training fold only. Each variant
+reuses saved out-of-fold and validation scores from the unchanged opposite
+branch, refits the logistic combiner on training OOF scores, and evaluates
+only the locked validation partition.
+
+The five new seed-42 variants and the fourteen seed-123 variants form 19
+remaining ablation tasks. Seed 123 also needs one unchanged reference-stack
+run. The seed-123 array should be submitted with an `afterok` dependency on
+the reference job. Both arrays run at most two tasks concurrently. Paths,
+dataset hashes, and Git commit are checked before training; existing run
+directories are never overwritten.
+
+After completion, from `experiment/pcbert_kla_clean/` run:
+
+```bash
+python scripts/summarize_clear_two_seed_ablations.py \
+  --output-root outputs/hpc_clear_stack_ablations \
+  --seed-42-reference /absolute/path/to/MM-Kla-stack/experiment/pcbert_kla_clean/outputs/hpc_clear_lactyl_development/mmkla_positional_stack/seed_42/results \
+  --seed-123-reference outputs/hpc_clear_lactyl_development/mmkla_positional_stack/seed_123/results
+```
+
+The summary checks all fourteen variants per seed against their unchanged
+reference and reports both seed-specific results and paired differences. A
+two-seed result is descriptive, especially when differences are near 0.001
+AUPRC; the held-out test remains untouched throughout these ablations.
