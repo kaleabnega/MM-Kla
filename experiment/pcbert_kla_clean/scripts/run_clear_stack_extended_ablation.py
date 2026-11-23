@@ -20,6 +20,8 @@ MODES = {
     "positional_mean_pool": ("positional", "mean_pool"),
     "no_descriptors": ("features", "no_descriptors"),
     "no_cksaap": ("features", "no_cksaap"),
+    "protbert_sequence_only": ("standalone", "no_features"),
+    "descriptors_27_only": ("standalone", "no_cksaap"),
 }
 
 
@@ -40,9 +42,14 @@ def main() -> None:
         device=torch.device(args.device), seed=args.seed,
         max_epochs=args.epochs, patience=args.patience,
         protbert_reference_dir=args.reference_dir if branch == "positional" else None,
-        positional_reference_dir=args.reference_dir if branch == "features" else None,
+        positional_reference_dir=args.reference_dir if branch in {"features", "standalone"} else None,
         positional_ablation=mode if branch == "positional" else "none",
-        feature_ablation=mode if branch == "features" else "none",
+        feature_ablation=mode if branch in {"features", "standalone"} else "none",
+        protbert_ablation=(
+            "no_physicochemical" if args.ablation == "protbert_sequence_only"
+            else "no_sequence" if args.ablation == "descriptors_27_only"
+            else "none"
+        ),
     )
     print("CLEAR-Lactyl stacked extended ablation validation:", flush=True)
     print(json.dumps(report["validation_metrics"], indent=2), flush=True)

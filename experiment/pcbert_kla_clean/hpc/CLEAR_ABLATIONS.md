@@ -113,3 +113,31 @@ The summary checks all fourteen variants per seed against their unchanged
 reference and reports both seed-specific results and paired differences. A
 two-seed result is descriptive, especially when differences are near 0.001
 AUPRC; the held-out test remains untouched throughout these ablations.
+
+## Standalone first-predictor controls
+
+`project_clear_standalone_branches.sbatch` runs four validation-only tasks:
+ProtBERT sequence-only and 27-descriptor-only, each for seeds 42 and 123.
+Sequence-only removes both the 27 descriptors and all CKSAAP features from
+the first predictor. Descriptor-only removes its ProtBERT encoder and CKSAAP,
+but retains its existing feature projection and classifier. These are not the
+same as the earlier independent 27-feature MLP experiment.
+
+Both controls use the existing five grouped outer folds and inner grouped
+epoch selection. The unchanged positional predictor's saved scores are reused
+from the seed-matched reference stack. Each report records the standalone
+first-predictor validation metrics and, separately, its newly refitted
+combination with the positional predictor. The locked internal test is not
+scored. Tasks run at most two at a time, one GPU per task; outputs are kept
+under `outputs/hpc_clear_standalone_branches/<mode>/seed_<seed>/`.
+
+After syncing the code commit, submit from the HPC `hpc/` directory:
+
+```bash
+export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
+sbatch --export=ALL project_clear_standalone_branches.sbatch
+```
+
+Array tasks 0 and 2 are ProtBERT-only (seeds 42 and 123); tasks 1 and 3
+are descriptor-only. The wrapper checks the Git commit, dataset lock hashes,
+complete reference outputs, and destination before starting training.

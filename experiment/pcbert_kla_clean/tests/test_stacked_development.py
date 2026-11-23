@@ -4,14 +4,16 @@ import json
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
 import torch
 
 from pcbert_kla_clean.stacked_development import (
-    PositionalSequenceBranch, grouped_splits, protbert_args,
+    PositionalSequenceBranch, feature_columns, fit_protbert, grouped_splits, protbert_args,
     read_positional_reference, sequence_tokens,
 )
+from pcbert_kla_clean.features import FEATURE_NAMES
 from pcbert_kla_clean.source_study import sha256
 
 
@@ -43,6 +45,38 @@ class StackedDevelopmentTests(unittest.TestCase):
         self.assertEqual(args.learning_rate, 2e-5)
         self.assertEqual(args.head_learning_rate, 1e-4)
         self.assertEqual(args.scheduler, "linear")
+
+    def test_standalone_predictor_feature_inputs(self):
+        split = SimpleNamespace(
+            features=np.ones((4, 1627), dtype=np.float32),
+            feature_names=list(FEATURE_NAMES) + [f"CKSAAP_{i}" for i in range(1600)],
+            labels=np.array([0, 1, 0, 1]),
+        )
+        self.assertEqual(len(feature_columns(split.feature_names, "no_features")), 0)
+        self.assertEqual(len(feature_columns(split.feature_names, "no_cksaap")), 27)
+        observed = []
+
+        def fake_loader(_split, _indices, features, *_args):
+            observed.append(features.shape[1])
+            return [None]
+
+        with (patch("pcbert_kla_clean.stacked_development.make_loader", side_effect=fake_loader),
+              patch("pcbert_kla_clean.stacked_development.build_model") as build_model,
+              patch("pcbert_kla_clean.stacked_development.build_optimizer"),
+              patch("pcbert_kla_clean.stacked_development.build_scheduler"),
+              patch("pcbert_kla_clean.stacked_development.train_one_epoch"),
+              patch("pcbert_kla_clean.stacked_development.predict", return_value=(0, None, np.array([0.2])))):
+            for mode, features, count in (
+                ("no_physicochemical", "no_features", 0),
+                ("no_sequence", "no_cksaap", 27),
+            ):
+                fit_protbert(
+                    split, np.array([0, 1]), np.array([2]), None,
+                    torch.device("cpu"), 42, 1, 1, fixed_epochs=1,
+                    ablation=mode, feature_ablation=features,
+                )
+                self.assertEqual(build_model.call_args.args[1], count)
+            self.assertEqual(observed, [0, 0, 27, 27])
 
     def test_saved_positional_scores_require_matching_rows_and_labels(self):
         with tempfile.TemporaryDirectory() as directory:

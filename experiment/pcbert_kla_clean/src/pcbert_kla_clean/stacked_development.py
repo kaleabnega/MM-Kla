@@ -35,7 +35,7 @@ AA_TO_ID = {residue: index for index, residue in enumerate(AA)}
 
 
 POSITIONAL_ABLATIONS = ("none", "no_position_embedding", "one_lstm_layer", "mean_pool")
-FEATURE_ABLATIONS = ("none", "no_descriptors", "no_cksaap")
+FEATURE_ABLATIONS = ("none", "no_descriptors", "no_cksaap", "no_features")
 
 
 class PositionalSequenceBranch(nn.Module):
@@ -117,6 +117,8 @@ def feature_columns(feature_names: list[str], ablation: str) -> np.ndarray:
         return np.arange(descriptor_count, len(feature_names))
     if ablation == "no_cksaap":
         return np.arange(descriptor_count)
+    if ablation == "no_features":
+        return np.array([], dtype=int)
     return np.arange(len(feature_names))
 
 
@@ -127,14 +129,19 @@ def fit_protbert(split, train_idx, score_idx, tokenizer, device, seed,
         raise ValueError("Refit needs a selected epoch within the 30-epoch schedule")
     set_seed(seed)
     args = protbert_args(max_epochs, ablation=ablation, freeze_encoder=freeze_encoder)
-    scaler = MinMaxScaler()
     columns = feature_columns(split.feature_names, feature_ablation)
+    if (feature_ablation == "no_features") != (ablation == "no_physicochemical"):
+        raise ValueError("Sequence-only ProtBERT must omit both descriptor families")
+    if ablation == "no_sequence" and feature_ablation != "no_cksaap":
+        raise ValueError("Descriptor-only control must use the 27 descriptors")
     features = split.features[:, columns]
-    scaled = np.empty_like(features, dtype=np.float32)
-    scaled[train_idx] = scaler.fit_transform(features[train_idx])
-    scaled[score_idx] = scaler.transform(features[score_idx])
-    if selection_idx is not None:
-        scaled[selection_idx] = scaler.transform(features[selection_idx])
+    scaled = np.zeros_like(features, dtype=np.float32)
+    if len(columns):
+        scaler = MinMaxScaler()
+        scaled[train_idx] = scaler.fit_transform(features[train_idx])
+        scaled[score_idx] = scaler.transform(features[score_idx])
+        if selection_idx is not None:
+            scaled[selection_idx] = scaler.transform(features[selection_idx])
     train_loader = make_loader(split, train_idx, scaled, tokenizer, 4, True, 64,
                                "protbert_spaced")
     score_loader = make_loader(split, score_idx, scaled, tokenizer, 4, False, 64,
@@ -428,8 +435,13 @@ def run(lock_path: Path, output_dir: Path, device: torch.device, seed: int,
         raise FloatingPointError("Incomplete or nonfinite branch scores")
     meta = LogisticRegression(C=1.0, max_iter=1000, solver="lbfgs")
     meta.fit(oof, labels[:train_count])
+    first_predictor_name = (
+        "protbert_sequence_only" if protbert_ablation == "no_physicochemical"
+        else "descriptors_27_only" if protbert_ablation == "no_sequence"
+        else "protbert_cksaap"
+    )
     scores = {
-        "protbert_cksaap": validation[:, 0],
+        first_predictor_name: validation[:, 0],
         "positional_sequence": validation[:, 1],
         "simple_average": validation.mean(axis=1),
         "oof_logistic_combination": meta.predict_proba(validation)[:, 1],
@@ -441,7 +453,7 @@ def run(lock_path: Path, output_dir: Path, device: torch.device, seed: int,
         if (reference["seed"] != seed or reference["lock_sha256"] != sha256(lock_path) or
                 reference["internal_test_scored"]):
             raise ValueError("Prior two-branch report does not match this validation run")
-        for name in ("protbert_cksaap", "positional_sequence", "oof_logistic_combination"):
+        for name in (first_predictor_name, "positional_sequence", "oof_logistic_combination"):
             previous = reference["validation_metrics"][name]
             for key in ("AUPRC", "AUC"):
                 if abs(results[name][key] - previous[key]) > 1e-3:
@@ -449,7 +461,7 @@ def run(lock_path: Path, output_dir: Path, device: torch.device, seed: int,
     test_results = None
     if test_predictions is not None:
         test_scores = {
-            "protbert_cksaap": test_predictions[:, 0],
+            first_predictor_name: test_predictions[:, 0],
             "positional_sequence": test_predictions[:, 1],
             "simple_average": test_predictions.mean(axis=1),
             "oof_logistic_combination": meta.predict_proba(test_predictions)[:, 1],
