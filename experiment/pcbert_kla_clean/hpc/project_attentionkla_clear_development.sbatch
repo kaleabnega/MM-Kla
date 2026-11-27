@@ -54,7 +54,8 @@ printf '%s  %s\n' \
     | sha256sum --check --status
 
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 PYTHONPATH="${PROJECT_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}"
-"${VENV_DIR}/bin/python" -m pytest -q "${PROJECT_DIR}/tests/test_attentionkla_development.py"
+"${VENV_DIR}/bin/python" -m unittest discover \
+    -s "${PROJECT_DIR}/tests" -p test_attentionkla_development.py -v
 "${VENV_DIR}/bin/python" -c \
     'import torch; assert torch.cuda.is_available() and torch.cuda.is_bf16_supported(); print("GPU:", torch.cuda.get_device_name(0), flush=True)'
 mkdir -p "${RUN_ROOT}"
