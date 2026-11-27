@@ -24,7 +24,7 @@ VENV_DIR="${VENV_DIR:-${REPO_DIR}/../.venv-hpc-cu118}"
 LOCK="${PROJECT_DIR}/outputs/clear_lactyl_locked/split_audit.json"
 PROTEOME="${PROJECT_DIR}/downloaded-dataset/UP000005640_9606.fasta.gz"
 REFERENCE="${PROJECT_DIR}/outputs/hpc_positional_global_pilot/seed_42/results/report.json"
-RUN_DIR="${PROJECT_DIR}/outputs/hpc_positional_order_context_pilot/seed_42"
+RUN_DIR="${PROJECT_DIR}/outputs/hpc_positional_order_context_pilot/seed_42_retry1"
 EXPECTED_COMMIT="${EXPECTED_COMMIT:?Set EXPECTED_COMMIT to the full pushed commit}"
 
 [[ "${EXPECTED_COMMIT}" =~ ^[0-9a-f]{40}$ ]] || exit 2

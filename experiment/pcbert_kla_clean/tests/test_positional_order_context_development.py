@@ -1,14 +1,21 @@
 import unittest
 from types import SimpleNamespace
 
+import numpy as np
 import torch
 
 from pcbert_kla_clean.positional_order_context_development import (
-    OrderContextPositionalBranch, make_protein_batch, protein_tokens,
+    OrderContextPositionalBranch, batch_targets, make_protein_batch, protein_tokens,
 )
 
 
 class PositionalOrderContextTests(unittest.TestCase):
+    def test_singleton_minibatch_preserves_label_dimension(self):
+        labels = np.array([0, 1, 0])
+        targets = batch_targets(labels, torch.tensor([1]), torch.device("cpu"))
+        self.assertEqual(targets.shape, (1,))
+        self.assertEqual(targets.tolist(), [1.0])
+
     def test_protein_batch_preserves_all_residues_and_site_positions(self):
         records = [SimpleNamespace(name="P1", position=3),
                    SimpleNamespace(name="P2", position=2)]

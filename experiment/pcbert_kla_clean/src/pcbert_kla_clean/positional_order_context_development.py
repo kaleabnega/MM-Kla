@@ -44,6 +44,10 @@ def make_protein_batch(indices: torch.Tensor, records, bank: dict[str, torch.Ten
     return pad_sequence(proteins, batch_first=True).to(device), lengths, positions
 
 
+def batch_targets(labels: np.ndarray, indices: torch.Tensor, device: torch.device) -> torch.Tensor:
+    return torch.as_tensor(labels[indices.tolist()], dtype=torch.float32, device=device)
+
+
 class OrderContextPositionalBranch(PositionalSequenceBranch):
     """Local positional pathway with an order-sensitive full-protein context."""
 
@@ -132,7 +136,7 @@ def fit_model(local_tokens, records, bank, labels, train_idx, score_idx, device,
             for micro in batch_indices.split(MICROBATCH):
                 proteins, lengths, positions = make_protein_batch(micro, records, bank, device)
                 logits = model(local_tokens[micro].to(device), proteins, lengths, positions)
-                loss = criterion(logits, torch.as_tensor(labels[micro], dtype=torch.float32, device=device))
+                loss = criterion(logits, batch_targets(labels, micro, device))
                 (loss / len(batch_indices)).backward()
             optimizer.step()
         if selection_idx is None:
