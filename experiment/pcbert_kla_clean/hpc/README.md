@@ -1,5 +1,31 @@
 # Slurm development runs
 
+## Positional full-protein-context pilot
+
+`project_positional_global_pilot.sbatch` compares the unchanged 51-residue
+positional BiLSTM predictor with a version that also attends to eight ordered
+full-protein amino-acid composition summaries. The target-containing summary
+is marked explicitly. Both variants use seed 42, the same five grouped outer
+folds and inner AUPRC-based epoch selection; they score only the locked
+CLEAR-Lactyl validation partition. This is a one-seed feasibility experiment,
+not a robustness or final-test result.
+
+The job requires the locked CLEAR-Lactyl audit and manifest, the pinned human
+reference FASTA, and the ready HPC Python environment. It checks their hashes
+and refuses to train outside a Slurm compute allocation. After pushing the
+code commit and updating the HPC checkout, submit from this directory:
+
+```bash
+export EXPECTED_COMMIT="$(git -C ../../.. rev-parse HEAD)"
+sbatch --export=ALL project_positional_global_pilot.sbatch
+```
+
+Results are written to
+`outputs/hpc_positional_global_pilot/seed_42/results/`: `report.json`, paired
+validation predictions, and out-of-fold branch scores. The Slurm log is
+`slurm-project-pos-global-<jobid>.out` in this directory. No held-out test
+scores are generated.
+
 These jobs reproduce the validation-only KlaDB human comparison in
 `kaggle_human_esm2_lora_three_models.ipynb` without Kaggle's per-run time limit.
 One job trains one model for one declared seed. The internal and study-held-out
