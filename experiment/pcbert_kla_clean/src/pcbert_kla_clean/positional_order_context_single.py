@@ -13,7 +13,9 @@ import torch
 from pcbert_kla_clean.clear_lactyl import load_clear_lactyl
 from pcbert_kla_clean.metrics import compute_binary_metrics
 from pcbert_kla_clean.positional_global_development import load_verified_proteins
-from pcbert_kla_clean.positional_order_context_development import fit_model, protein_tokens
+from pcbert_kla_clean.positional_order_context_development import (
+    OrderContextPositionalBranch, fit_model, protein_tokens,
+)
 from pcbert_kla_clean.source_study import sha256
 from pcbert_kla_clean.stacked_development import (
     grouped_splits, read_training_groups, sequence_tokens,
@@ -21,7 +23,9 @@ from pcbert_kla_clean.stacked_development import (
 
 
 def run(lock: Path, proteome: Path, output_dir: Path, device: torch.device,
-        seed: int = 42, max_epochs: int = 30, patience: int = 5) -> dict:
+        seed: int = 42, max_epochs: int = 30, patience: int = 5,
+        model_factory=OrderContextPositionalBranch,
+        model_name: str = "single order-context positional predictor") -> dict:
     if seed < 0 or max_epochs < 1 or patience < 1:
         raise ValueError("Invalid training configuration")
     if device.type != "cuda" or not torch.cuda.is_available():
@@ -44,6 +48,7 @@ def run(lock: Path, proteome: Path, output_dir: Path, device: torch.device,
     selected_epoch, selection_auprc = fit_model(
         local_tokens, split.records, bank, labels, train_idx, select_idx,
         device, training_seed, max_epochs, patience, selection_idx=select_idx,
+        model_factory=model_factory,
     )
     print(f"Selected epoch {selected_epoch}; refitting on {train_count} training rows",
           flush=True)
@@ -51,6 +56,7 @@ def run(lock: Path, proteome: Path, output_dir: Path, device: torch.device,
         local_tokens, split.records, bank, labels, np.arange(train_count),
         validation_idx, device, training_seed, max_epochs, patience,
         fixed_epochs=selected_epoch, checkpoint_path=output_dir / "model.pt",
+        model_factory=model_factory,
     )
     if len(scores) != len(validation_idx) or not np.isfinite(scores).all():
         raise FloatingPointError("Invalid validation predictions")
@@ -62,7 +68,7 @@ def run(lock: Path, proteome: Path, output_dir: Path, device: torch.device,
             record = split.records[int(index)]
             writer.writerow((record.name, record.position, record.label, float(score)))
     report = {
-        "model": "single order-context positional predictor",
+        "model": model_name,
         "seed": seed, "training_seed": training_seed,
         "lock_sha256": sha256(lock), "proteome_sha256": sha256(proteome),
         "training_rows": train_count, "selection_train_rows": len(train_idx),

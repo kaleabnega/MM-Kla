@@ -88,6 +88,10 @@ class OrderContextPositionalBranch(PositionalSequenceBranch):
         marker = (chunk_ids[None, :] == site_bin[:, None]).long()
         return pooled + self.global_position(chunk_ids) + self.site_marker(marker)
 
+    def global_padding_mask(self, proteins: torch.Tensor, lengths: torch.Tensor,
+                            site_positions: torch.Tensor) -> torch.Tensor | None:
+        return None
+
     def forward(self, local_tokens: torch.Tensor, proteins: torch.Tensor,
                 lengths: torch.Tensor, site_positions: torch.Tensor) -> torch.Tensor:
         positions = torch.arange(51, device=local_tokens.device)
@@ -100,6 +104,7 @@ class OrderContextPositionalBranch(PositionalSequenceBranch):
         global_tokens = self.encode_protein(proteins, lengths, site_positions)
         global_context, _ = self.global_attention(
             self.global_query(center)[:, None, :], global_tokens, global_tokens,
+            key_padding_mask=self.global_padding_mask(proteins, lengths, site_positions),
             need_weights=False,
         )
         return self.classifier(torch.cat((center, local_context, global_context[:, 0]), dim=-1)).squeeze(-1)
@@ -118,11 +123,11 @@ def predict_scores(model, local_tokens, records, bank, indices, device):
 
 def fit_model(local_tokens, records, bank, labels, train_idx, score_idx, device,
               seed, max_epochs, patience, selection_idx=None, fixed_epochs=None,
-              checkpoint_path=None):
+              checkpoint_path=None, model_factory=OrderContextPositionalBranch):
     if selection_idx is None and (fixed_epochs is None or not 1 <= fixed_epochs <= max_epochs):
         raise ValueError("Refit requires a selected epoch")
     set_seed(seed)
-    model = OrderContextPositionalBranch().to(device)
+    model = model_factory().to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.01)
     criterion = nn.BCEWithLogitsLoss(reduction="sum")
     generator = torch.Generator().manual_seed(seed)
