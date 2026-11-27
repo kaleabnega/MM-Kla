@@ -92,6 +92,10 @@ class OrderContextPositionalBranch(PositionalSequenceBranch):
                             site_positions: torch.Tensor) -> torch.Tensor | None:
         return None
 
+    def encode_context(self, proteins: torch.Tensor, lengths: torch.Tensor,
+                       site_positions: torch.Tensor, center: torch.Tensor) -> torch.Tensor:
+        return self.encode_protein(proteins, lengths, site_positions)
+
     def forward(self, local_tokens: torch.Tensor, proteins: torch.Tensor,
                 lengths: torch.Tensor, site_positions: torch.Tensor) -> torch.Tensor:
         positions = torch.arange(51, device=local_tokens.device)
@@ -101,7 +105,7 @@ class OrderContextPositionalBranch(PositionalSequenceBranch):
         query = center[:, None, :].expand_as(states)
         weights = torch.softmax(self.attention(torch.cat((states, query), dim=-1)), dim=1)
         local_context = (weights * states).sum(dim=1)
-        global_tokens = self.encode_protein(proteins, lengths, site_positions)
+        global_tokens = self.encode_context(proteins, lengths, site_positions, center)
         global_context, _ = self.global_attention(
             self.global_query(center)[:, None, :], global_tokens, global_tokens,
             key_padding_mask=self.global_padding_mask(proteins, lengths, site_positions),
