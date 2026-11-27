@@ -402,6 +402,22 @@ sbatch --export=ALL project_mmkla_positional_stack_clear.sbatch
 The report, out-of-fold scores, and validation predictions are written to
 `outputs/hpc_clear_lactyl_development/mmkla_positional_stack/seed_42/results/`.
 
+### Single-model order-context positional check
+
+`project_positional_order_context_single.sbatch` evaluates one fitted
+order-context positional predictor, rather than averaging five fold models.
+A protein-grouped subset of the locked training partition selects the epoch;
+the model is then reinitialized and fitted on all 20,599 training sites for
+that fixed number of epochs. Only the 2,944-site validation partition is
+scored. The fitted checkpoint, per-site validation scores, and report are
+saved under `outputs/hpc_positional_order_context_single/seed_42/results/`.
+This is a development comparison with the five-model pilot, not a held-out
+test result.
+
+Submit from the HPC directory after syncing the committed code and setting
+`EXPECTED_COMMIT` to its full hash. The script refuses to train outside a
+Slurm GPU allocation.
+
 ### ProtBERT-contextual positional experiment
 
 `project_mmkla_contextual_positional_clear.sbatch` tests a contextual version

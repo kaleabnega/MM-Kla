@@ -117,7 +117,8 @@ def predict_scores(model, local_tokens, records, bank, indices, device):
 
 
 def fit_model(local_tokens, records, bank, labels, train_idx, score_idx, device,
-              seed, max_epochs, patience, selection_idx=None, fixed_epochs=None):
+              seed, max_epochs, patience, selection_idx=None, fixed_epochs=None,
+              checkpoint_path=None):
     if selection_idx is None and (fixed_epochs is None or not 1 <= fixed_epochs <= max_epochs):
         raise ValueError("Refit requires a selected epoch")
     set_seed(seed)
@@ -152,6 +153,12 @@ def fit_model(local_tokens, records, bank, labels, train_idx, score_idx, device,
             break
     result = ((best_epoch, best_ap) if selection_idx is not None else
               predict_scores(model, local_tokens, records, bank, score_idx, device))
+    if checkpoint_path is not None:
+        if selection_idx is not None:
+            raise ValueError("Checkpoint saving requires a fixed-epoch refit")
+        torch.save({"model_state_dict": {name: value.detach().cpu()
+                                         for name, value in model.state_dict().items()},
+                    "selected_epoch": fixed_epochs}, checkpoint_path)
     del model, optimizer
     if device.type == "cuda":
         torch.cuda.empty_cache()
