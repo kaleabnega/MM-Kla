@@ -96,10 +96,13 @@ class OrderContextPositionalBranch(PositionalSequenceBranch):
                        site_positions: torch.Tensor, center: torch.Tensor) -> torch.Tensor:
         return self.encode_protein(proteins, lengths, site_positions)
 
+    def encode_local(self, local_tokens: torch.Tensor) -> torch.Tensor:
+        positions = torch.arange(51, device=local_tokens.device)
+        return self.residue(local_tokens) + self.position(positions)[None, :, :]
+
     def forward(self, local_tokens: torch.Tensor, proteins: torch.Tensor,
                 lengths: torch.Tensor, site_positions: torch.Tensor) -> torch.Tensor:
-        positions = torch.arange(51, device=local_tokens.device)
-        embedded = self.residue(local_tokens) + self.position(positions)[None, :, :]
+        embedded = self.encode_local(local_tokens)
         states, _ = self.encoder(embedded)
         center = states[:, 25, :]
         query = center[:, None, :].expand_as(states)
